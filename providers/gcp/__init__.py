@@ -1,0 +1,1 @@
+"""GCP IAM identity collection."""
