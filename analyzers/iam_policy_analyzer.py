@@ -11,6 +11,7 @@
 #   IAMP-005 — NotAction with Effect Allow → effectively wildcard
 #   IAMP-006 — NotResource with Effect Allow → grants action on everything else
 #   IAMP-007 — Sensitive data action on Resource "*"
+#   IAMP-008 — iam:PassRole on Resource "*" → broad privilege delegation
 #
 # Copyright (c) 2026 Cyber Port (github.com/hiagokinlevi)
 # Licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0).
@@ -65,6 +66,7 @@ _WEIGHTS: Dict[str, int] = {
     "IAMP-005": 30,
     "IAMP-006": 25,
     "IAMP-007": 25,
+    "IAMP-008": 40,
 }
 
 # Risk tier thresholds.
@@ -537,6 +539,43 @@ def _check_iamp007(
             return  # fire once per statement
 
 
+def _check_iamp008(
+    stmt: Dict[str, Any],
+    actions: List[str],
+    effect: str,
+    resources: List[str],
+    checks: List[IAMPCheck],
+) -> None:
+    """IAMP-008: iam:PassRole on Resource "*".
+
+    Fires when Effect is Allow, the action explicitly grants iam:PassRole, and
+    the resource scope is unrestricted. Broader iam:* and * action grants are
+    already covered by IAMP-001 to avoid double-counting the same statement.
+    """
+    if effect.lower() != "allow":
+        return
+    if not _is_wildcard_resource(resources):
+        return
+
+    action_lower = _action_lower_list(actions)
+    grants_pass_role = "iam:passrole" in action_lower
+    if not grants_pass_role:
+        return
+
+    checks.append(
+        IAMPCheck(
+            check_id="IAMP-008",
+            severity="HIGH",
+            description=(
+                "iam:PassRole on Resource \"*\" allows passing any role to supported "
+                "services, creating an indirect privilege escalation path."
+            ),
+            evidence=_evidence(stmt, actions, resources),
+            weight=_WEIGHTS["IAMP-008"],
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -601,12 +640,13 @@ def analyze(policy: IAMPolicyDocument) -> IAMPResult:
         else:
             resources = []  # NotResource statements — resource list is the exclusion list
 
-        # Run statement-level checks (IAMP-001, 002, 003, 007).
+        # Run statement-level checks (IAMP-001, 002, 003, 007, 008).
         if not has_not_action and not has_not_resource:
             _check_iamp001(stmt, actions, effect, checks, resources)
             _check_iamp002(stmt, actions, effect, resources, checks)
             _check_iamp003(stmt, actions, effect, resources, checks)
             _check_iamp007(stmt, actions, effect, resources, checks)
+            _check_iamp008(stmt, actions, effect, resources, checks)
 
         # IAMP-005: NotAction + Allow
         _check_iamp005(stmt, effect, checks)

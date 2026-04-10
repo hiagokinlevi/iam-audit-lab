@@ -18,9 +18,12 @@ limited permissions can acquire higher-level access:
   because the trust policy is overly permissive.
 - **Service-linked role abuse**: A principal can create a service-linked role that it can then
   assume.
+- **Unrestricted role passing**: A principal with `iam:PassRole` on `Resource "*"` can pass any
+  role to supported AWS services and indirectly gain the role's privileges.
 
-The v0.1 analyzer focuses on directly attached privileged policies rather than escalation path
-analysis (planned for v0.3).
+The offline policy analyzer flags direct escalation indicators in exported AWS IAM policy JSON,
+including wildcard actions, broad `sts:AssumeRole`, `NotAction`/`NotResource`, sensitive-data
+access on broad resources, and unrestricted `iam:PassRole`.
 
 ### Credential persistence
 
@@ -79,5 +82,7 @@ decommissioning workflows. Audit for service accounts with no recent usage.
 - **Permissions granted via resource-based policies** (e.g., S3 bucket policies, KMS key policies)
 - **Service control policies (SCPs)** that restrict effective permissions
 - **Permission boundaries** that limit the maximum permissions of a user/role
+- **Runtime service constraints** that determine whether a specific `iam:PassRole` grant is
+  exploitable with a matching compute or orchestration service
 - **Zero-day vulnerabilities** in cloud provider IAM services
 - **Insider threats** (an authorized user deliberately misusing their permissions)

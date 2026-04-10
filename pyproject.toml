@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "iam-audit-lab"
@@ -61,10 +61,10 @@ dev = [
 ]
 
 [project.scripts]
-k1n-iam-audit = "cli.main:cli"
+k1n-iam-audit = "iam_audit_lab_cli.main:cli"
 
-[tool.hatch.build.targets.wheel]
-packages = ["providers", "analyzers", "schemas", "reports", "cli"]
+[tool.setuptools]
+packages = ["providers", "analyzers", "schemas", "reports", "cli", "iam_audit_lab_cli"]
 
 [tool.ruff]
 line-length = 100

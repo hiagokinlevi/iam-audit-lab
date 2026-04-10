@@ -12,6 +12,8 @@ IAM misconfigurations are among the most common causes of cloud security inciden
 
 - **Excessive permissions** — Service accounts and users with admin-level access that only need
   narrow, purpose-specific permissions.
+- **Unsafe policy documents** — AWS IAM policies with wildcard data access, broad trust pivots,
+  `NotAction`/`NotResource` grants, or unrestricted `iam:PassRole`.
 - **Inactive accounts** — Former employees, decommissioned services, or forgotten test accounts
   that retain their permissions indefinitely.
 - **MFA gaps** — Human accounts that can be accessed with only a password, making them vulnerable
@@ -34,12 +36,20 @@ IAM misconfigurations are among the most common causes of cloud security inciden
 1. A **collector** connects to a cloud provider's API and retrieves identity records.
 2. Each record is normalized into an `IdentityRecord` Pydantic model.
 3. **Analyzers** process the normalized records and produce `AuditFinding` objects.
-4. The **report generator** formats findings and identity data into Markdown reports.
-5. The **CLI** orchestrates collectors, analyzers, and the report generator.
+4. The offline policy analyzer can review exported AWS IAM policy JSON without cloud credentials.
+5. The **report generator** formats findings and identity data into Markdown reports.
+6. The **CLI** orchestrates collectors, analyzers, offline policy review, and the report generator.
+
+## Offline IAM policy review
+
+Use `k1n-iam-audit analyze-policy --policy-file ./policy.json --policy-name deploy-policy` to
+review a saved AWS IAM policy document. Add `--format json` for automation or `--fail-on high`
+to fail a CI job when the computed risk tier reaches the selected threshold.
 
 ## Scope limitations
 
 - AWS: Does not analyze CloudTrail for access key usage (planned for v0.2)
 - Azure: MFA status requires Azure AD Premium P1/P2
 - GCP: Human user collection requires Cloud Identity / Workspace Admin SDK (planned for v0.2)
-- All providers: Custom roles/policies with broad permissions are not analyzed in v0.1
+- AWS: Offline policy review covers the exported JSON document; it does not resolve effective
+  permissions after SCPs, permission boundaries, or resource-based policies are applied.

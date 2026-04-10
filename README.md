@@ -20,6 +20,7 @@ IAM configurations across AWS, Azure, GCP, and Microsoft Entra ID. It produces s
 findings and human-readable reports that help security and platform teams:
 
 - Identify accounts with excessive or unused permissions
+- Review exported AWS IAM policy JSON offline for wildcard and PassRole escalation risk
 - Find inactive users and service accounts that should be deprovisioned
 - Measure MFA coverage for privileged and non-privileged accounts
 - Generate reports for compliance reviews and security audits
@@ -37,6 +38,7 @@ CLI (click)
     │                              └── GCP IAM (google-cloud-iam)
     │
     ├── analyze-privileges  ──►  Excessive permissions analyzer
+    ├── analyze-policy      ──►  Offline AWS IAM policy analyzer
     ├── analyze-mfa         ──►  MFA coverage analyzer
     ├── analyze-inactive    ──►  Inactive accounts analyzer
     │
@@ -90,6 +92,9 @@ k1n-iam-audit collect-identities --provider aws
 
 # Analyze for excessive permissions
 k1n-iam-audit analyze-privileges --provider aws
+
+# Review an exported AWS IAM policy without cloud credentials
+k1n-iam-audit analyze-policy --policy-file ./policy.json --policy-name deploy-policy --fail-on high
 
 # Check MFA coverage
 k1n-iam-audit analyze-mfa --provider aws
@@ -151,6 +156,7 @@ Required role: **roles/iam.securityReviewer** on the project.
 | `providers/azure/identity_collector.py` | Collects Azure AD users and service principals |
 | `providers/gcp/identity_collector.py` | Collects GCP IAM members and service accounts |
 | `analyzers/excessive_permissions/analyzer.py` | Detects overly broad permissions |
+| `analyzers/iam_policy_analyzer.py` | Reviews exported AWS IAM policy JSON for wildcard, data-access, NotAction/NotResource, and PassRole risks |
 | `analyzers/inactive_accounts/analyzer.py` | Identifies dormant accounts |
 | `analyzers/mfa_coverage/analyzer.py` | Measures MFA enrollment |
 | `schemas/identity.py` | Pydantic models for normalized identity data |

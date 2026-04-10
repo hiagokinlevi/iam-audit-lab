@@ -692,6 +692,52 @@ class TestIAMP007:
 
 
 # ===========================================================================
+# IAMP-008  iam:PassRole on Resource "*"
+# ===========================================================================
+
+class TestIAMP008:
+
+    def test_passrole_wildcard_resource_triggers(self):
+        """iam:PassRole on Resource '*' fires IAMP-008."""
+        pol = _policy(_doc([_allow("iam:PassRole", "*")]))
+        result = analyze(pol)
+        assert "IAMP-008" in _fired_ids(result)
+
+    def test_iam_wildcard_is_left_to_iamp001(self):
+        """iam:* is covered by IAMP-001 and must not double-count as IAMP-008."""
+        pol = _policy(_doc([_allow("iam:*", "*")]))
+        result = analyze(pol)
+        assert "IAMP-001" in _fired_ids(result)
+        assert "IAMP-008" not in _fired_ids(result)
+
+    def test_global_wildcard_is_left_to_iamp001(self):
+        """Action '*' is covered by IAMP-001 and must not double-count as IAMP-008."""
+        pol = _policy(_doc([_allow("*", "*")]))
+        result = analyze(pol)
+        assert "IAMP-001" in _fired_ids(result)
+        assert "IAMP-008" not in _fired_ids(result)
+
+    def test_passrole_specific_role_does_not_trigger(self):
+        """iam:PassRole scoped to one role ARN must NOT fire IAMP-008."""
+        pol = _policy(_doc([_allow("iam:PassRole", "arn:aws:iam::123456789012:role/deploy")]))
+        result = analyze(pol)
+        assert "IAMP-008" not in _fired_ids(result)
+
+    def test_deny_passrole_does_not_trigger(self):
+        """iam:PassRole in a Deny statement must NOT fire IAMP-008."""
+        pol = _policy(_doc([_deny("iam:PassRole", "*")]))
+        result = analyze(pol)
+        assert "IAMP-008" not in _fired_ids(result)
+
+    def test_passrole_severity_is_high(self):
+        """IAMP-008 must have HIGH severity."""
+        pol = _policy(_doc([_allow("iam:PassRole", "*")]))
+        result = analyze(pol)
+        c = next(c for c in result.checks_fired if c.check_id == "IAMP-008")
+        assert c.severity == "HIGH"
+
+
+# ===========================================================================
 # Risk score and tier
 # ===========================================================================
 
