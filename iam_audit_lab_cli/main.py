@@ -9,6 +9,7 @@ Commands:
   analyze-policy      — Analyze exported AWS IAM policy JSON offline
   analyze-mfa         — Check MFA coverage for human accounts
   analyze-inactive    — Find accounts inactive beyond the threshold
+  analyze-password-policy — Check the AWS account password policy baseline
   generate-report     — Run all analyzers and generate a Markdown report
 
 Usage:
@@ -250,6 +251,58 @@ def analyze_inactive(provider: str, inactive_days: int, identities_file: str | N
 
 
 # ---------------------------------------------------------------------------
+# analyze-password-policy
+# ---------------------------------------------------------------------------
+
+
+@cli.command("analyze-password-policy")
+@click.option("--policy-file", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="Optional AWS GetAccountPasswordPolicy JSON export. "
+                   "If omitted, the CLI calls the read-only IAM API.")
+@click.option("--account-id", default=lambda: os.getenv("AWS_ACCOUNT_ID", "unknown"),
+              show_default=True,
+              help="Account identifier to include in the report.")
+@click.option("--json-output", "json_output", is_flag=True,
+              help="Print the full analyzer result as JSON.")
+@click.option("--fail-on", type=click.Choice(["low", "medium", "high"], case_sensitive=False),
+              default=None,
+              help="Exit non-zero when a finding at or above this severity is present.")
+def analyze_password_policy(
+    policy_file: str | None,
+    account_id: str,
+    json_output: bool,
+    fail_on: str | None,
+) -> None:
+    """Analyze the AWS account password policy for baseline weaknesses."""
+    from analyzers.aws_password_policy_analyzer import analyze_password_policy as analyze_policy
+
+    if policy_file:
+        data = json.loads(Path(policy_file).read_text(encoding="utf-8"))
+        policy = data.get("PasswordPolicy", data)
+    else:
+        iam = _get_aws_session().client("iam")
+        try:
+            policy = iam.get_account_password_policy()["PasswordPolicy"]
+        except Exception as exc:
+            error_code = getattr(exc, "response", {}).get("Error", {}).get("Code")
+            if error_code != "NoSuchEntity":
+                raise
+            policy = None
+
+    result = analyze_policy(policy, account_id=account_id)
+
+    if json_output:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        click.echo(result.summary())
+        for finding in result.findings:
+            click.echo(f"  [{finding.severity}] {finding.rule_id}: {finding.title}")
+
+    if fail_on and _has_finding_at_or_above(result.findings, fail_on):
+        raise click.ClickException(f"Password policy findings met --fail-on {fail_on}.")
+
+
+# ---------------------------------------------------------------------------
 # generate-report
 # ---------------------------------------------------------------------------
 
@@ -352,6 +405,12 @@ def _tier_meets_threshold(tier: str, threshold: str) -> bool:
     """Return True when a policy risk tier meets or exceeds a threshold."""
     order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
     return order[tier.upper()] >= order[threshold.upper()]
+
+
+def _has_finding_at_or_above(findings: list, minimum: str) -> bool:
+    order = {"low": 1, "medium": 2, "high": 3}
+    threshold = order[minimum.lower()]
+    return any(order.get(finding.severity.lower(), 0) >= threshold for finding in findings)
 
 
 if __name__ == "__main__":

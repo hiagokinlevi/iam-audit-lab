@@ -96,6 +96,9 @@ k1n-iam-audit analyze-privileges --provider aws
 # Review an exported AWS IAM policy without cloud credentials
 k1n-iam-audit analyze-policy --policy-file ./policy.json --policy-name deploy-policy --fail-on high
 
+# Review an exported AWS account password policy
+k1n-iam-audit analyze-password-policy --policy-file ./exports/password-policy.json --json-output
+
 # Check MFA coverage
 k1n-iam-audit analyze-mfa --provider aws
 
@@ -157,11 +160,12 @@ Required role: **roles/iam.securityReviewer** on the project.
 | `providers/gcp/identity_collector.py` | Collects GCP IAM members and service accounts |
 | `analyzers/excessive_permissions/analyzer.py` | Detects overly broad permissions |
 | `analyzers/iam_policy_analyzer.py` | Reviews exported AWS IAM policy JSON for wildcard, data-access, NotAction/NotResource, and PassRole risks |
+| `analyzers/aws_password_policy_analyzer.py` | Reviews AWS password policy length, complexity, and reuse controls |
 | `analyzers/inactive_accounts/analyzer.py` | Identifies dormant accounts |
 | `analyzers/mfa_coverage/analyzer.py` | Measures MFA enrollment |
 | `schemas/identity.py` | Pydantic models for normalized identity data |
 | `reports/generator.py` | Markdown report generator |
-| `cli/main.py` | Click CLI entry point |
+| `iam_audit_lab_cli/main.py` | Repository-unique Click CLI entry point |
 
 ---
 

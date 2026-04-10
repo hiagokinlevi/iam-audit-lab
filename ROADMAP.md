@@ -25,7 +25,7 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 - [ ] AWS: Detect unused IAM access keys (no use in N days)
 - [ ] AWS: Identify roles with no trust policy referencing known services
 - [x] AWS: Flag unrestricted `iam:PassRole` in exported IAM policy JSON
-- [ ] AWS: Flag accounts missing a strong password policy
+- [x] AWS: Flag accounts missing a strong password policy
 - [ ] Azure: Detect guest users with privileged role assignments
 - [ ] GCP: Detect projects with allUsers / allAuthenticatedUsers bindings
 - [ ] Risk score aggregation (per account and per finding)

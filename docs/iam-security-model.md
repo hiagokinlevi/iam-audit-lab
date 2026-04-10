@@ -33,6 +33,8 @@ not deprovisioned:
 - **Long-lived access keys**: AWS access keys with no rotation create persistent attack surface.
 - **Inactive accounts**: Compromised credentials go undetected when the account is dormant.
 - **No expiry on service accounts**: GCP and Azure service account keys with no expiry date.
+- **Weak account password policy**: AWS accounts without a strong password policy can allow short,
+  low-complexity, or frequently reused passwords for IAM users that still require console access.
 
 ### Blast radius model
 
@@ -66,7 +68,8 @@ credentials are found in a breach database. The attacker logs in with the stolen
 required) and exfiltrates data.
 
 **Mitigation**: Enforce a 30-day deprovisioning SLA for departed employees. Enable MFA for all
-accounts and enforce it via policy.
+accounts and enforce it via policy. For AWS IAM users that still need passwords, require at least
+14 characters, full character-class complexity, and 24-password reuse prevention.
 
 ### Scenario 3: Orphaned service account with keys
 

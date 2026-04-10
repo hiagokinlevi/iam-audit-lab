@@ -268,12 +268,15 @@ class RiskScore(BaseModel):
 
         Weights should sum to 1.0. Returns self for chaining.
         """
-        self.overall_score = min(1.0, round(
-            self.privilege_score * privilege_weight
-            + self.inactivity_score * inactivity_weight
-            + self.mfa_score * mfa_weight,
-            4,
-        ))
+        self.overall_score = min(
+            1.0,
+            round(
+                self.privilege_score * privilege_weight
+                + self.inactivity_score * inactivity_weight
+                + self.mfa_score * mfa_weight,
+                4,
+            ),
+        )
         # Map overall score to severity
         if self.overall_score >= 0.8:
             self.severity = FindingSeverity.CRITICAL

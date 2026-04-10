@@ -18,6 +18,8 @@ IAM misconfigurations are among the most common causes of cloud security inciden
   that retain their permissions indefinitely.
 - **MFA gaps** — Human accounts that can be accessed with only a password, making them vulnerable
   to credential theft.
+- **Weak password policy** — AWS IAM user passwords that allow short, low-complexity, or reused
+  credentials when federation has not fully replaced console passwords.
 - **Orphaned accounts** — Provisioned but never activated accounts that accumulate over time.
 
 ## Design principles
@@ -49,6 +51,8 @@ to fail a CI job when the computed risk tier reaches the selected threshold.
 ## Scope limitations
 
 - AWS: Does not analyze CloudTrail for access key usage (planned for v0.2)
+- AWS: Password policy review supports live read-only API checks and offline
+  `GetAccountPasswordPolicy` JSON exports.
 - Azure: MFA status requires Azure AD Premium P1/P2
 - GCP: Human user collection requires Cloud Identity / Workspace Admin SDK (planned for v0.2)
 - AWS: Offline policy review covers the exported JSON document; it does not resolve effective
