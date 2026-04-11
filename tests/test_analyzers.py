@@ -111,6 +111,61 @@ class TestExcessivePermissionsAnalyzer:
         assert len(findings) == 1
         assert findings[0].severity == FindingSeverity.CRITICAL
 
+    def test_gcp_public_allusers_viewer_binding_is_detected(self) -> None:
+        identity = make_identity(
+            name="allUsers",
+            provider="gcp",
+            attached_policies=["roles/viewer"],
+        )
+        findings = analyze_excessive_permissions([identity])
+        assert len(findings) == 1
+        assert findings[0].severity == FindingSeverity.MEDIUM
+        assert findings[0].title == "Public GCP IAM binding: allUsers -> roles/viewer"
+
+    def test_gcp_public_allauthenticatedusers_admin_binding_is_high(self) -> None:
+        identity = make_identity(
+            name="allAuthenticatedUsers",
+            provider="gcp",
+            attached_policies=["roles/iam.serviceAccountAdmin"],
+        )
+        findings = analyze_excessive_permissions([identity])
+        assert len(findings) == 1
+        assert findings[0].severity == FindingSeverity.HIGH
+        assert findings[0].risk_score == 0.75
+
+    def test_gcp_public_owner_binding_is_critical_without_duplicate_generic_finding(self) -> None:
+        identity = make_identity(
+            name="allUsers",
+            provider="gcp",
+            attached_policies=["roles/owner"],
+        )
+        findings = analyze_excessive_permissions([identity])
+        assert len(findings) == 1
+        assert findings[0].severity == FindingSeverity.CRITICAL
+        assert "Public GCP IAM binding" in findings[0].title
+
+    def test_gcp_public_binding_with_multiple_roles_produces_multiple_findings(self) -> None:
+        identity = make_identity(
+            name="allUsers",
+            provider="gcp",
+            attached_policies=["roles/viewer", "roles/editor"],
+        )
+        findings = analyze_excessive_permissions([identity])
+        assert len(findings) == 2
+        severities = {finding.severity for finding in findings}
+        assert severities == {FindingSeverity.MEDIUM, FindingSeverity.HIGH}
+
+    def test_public_principal_name_on_non_gcp_identity_is_not_treated_as_gcp_public_binding(
+        self,
+    ) -> None:
+        identity = make_identity(
+            name="allUsers",
+            provider="aws",
+            attached_policies=["AmazonEC2ReadOnlyAccess"],
+        )
+        findings = analyze_excessive_permissions([identity])
+        assert findings == []
+
     def test_empty_identity_list_returns_no_findings(self) -> None:
         assert analyze_excessive_permissions([]) == []
 

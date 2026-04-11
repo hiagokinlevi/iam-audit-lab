@@ -20,6 +20,7 @@ IAM configurations across AWS, Azure, GCP, and Microsoft Entra ID. It produces s
 findings and human-readable reports that help security and platform teams:
 
 - Identify accounts with excessive or unused permissions
+- Flag GCP IAM policies that grant project roles to `allUsers` or `allAuthenticatedUsers`
 - Review exported AWS IAM policy JSON offline for wildcard and PassRole escalation risk
 - Find inactive users and service accounts that should be deprovisioned
 - Measure MFA coverage for privileged and non-privileged accounts
@@ -158,7 +159,7 @@ Required role: **roles/iam.securityReviewer** on the project.
 | `providers/aws/identity_collector.py` | Collects IAM users and roles from AWS |
 | `providers/azure/identity_collector.py` | Collects Azure AD users and service principals |
 | `providers/gcp/identity_collector.py` | Collects GCP IAM members and service accounts |
-| `analyzers/excessive_permissions/analyzer.py` | Detects overly broad permissions |
+| `analyzers/excessive_permissions/analyzer.py` | Detects overly broad permissions and public GCP IAM bindings |
 | `analyzers/iam_policy_analyzer.py` | Reviews exported AWS IAM policy JSON for wildcard, data-access, NotAction/NotResource, and PassRole risks |
 | `analyzers/aws_password_policy_analyzer.py` | Reviews AWS password policy length, complexity, and reuse controls |
 | `analyzers/inactive_accounts/analyzer.py` | Identifies dormant accounts |
