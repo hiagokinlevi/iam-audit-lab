@@ -25,12 +25,14 @@ from urllib.parse import urlparse
 from schemas.identity import IdentityRecord, IdentityStatus, IdentityType
 
 logger = logging.getLogger(__name__)
+GRAPH_API_BASE_URL = "https://graph.microsoft.com"
 GRAPH_API_HOSTS = {
     "graph.microsoft.com",
     "graph.microsoft.us",
     "dod-graph.microsoft.us",
     "microsoftgraph.chinacloudapi.cn",
 }
+GRAPH_API_VERSION_PREFIXES = ("/v1.0", "/beta")
 
 
 def _get_graph_client() -> Any:
@@ -78,16 +80,35 @@ def _graph_get(credential: Any, endpoint: str, params: Optional[dict] = None) ->
         "Content-Type": "application/json",
     }
 
-    url = f"https://graph.microsoft.com/v1.0{endpoint}"
+    url = _build_graph_api_url(endpoint)
     response = requests.get(url, headers=headers, params=params or {}, timeout=30)
     response.raise_for_status()
     return response.json()
+
+
+def _build_graph_api_url(endpoint: str) -> str:
+    """Build a Microsoft Graph API URL from a safe relative endpoint."""
+    if not endpoint.startswith("/"):
+        raise ValueError("Microsoft Graph endpoints must start with '/'.")
+    if endpoint == GRAPH_API_VERSION_PREFIXES[0] or endpoint.startswith(
+        f"{GRAPH_API_VERSION_PREFIXES[0]}/"
+    ):
+        return f"{GRAPH_API_BASE_URL}{endpoint}"
+    if endpoint == GRAPH_API_VERSION_PREFIXES[1] or endpoint.startswith(
+        f"{GRAPH_API_VERSION_PREFIXES[1]}/"
+    ):
+        return f"{GRAPH_API_BASE_URL}{endpoint}"
+    return f"{GRAPH_API_BASE_URL}/v1.0{endpoint}"
 
 
 def _normalize_graph_pagination_endpoint(page_url: str) -> str:
     """Convert a Graph nextLink URL into a safe relative endpoint."""
     parsed = urlparse(page_url)
     if not parsed.scheme and not parsed.netloc:
+        if not page_url.startswith("/"):
+            raise ValueError(
+                "Microsoft Graph pagination endpoints must start with '/' when using a relative path."
+            )
         return page_url
     if parsed.scheme.lower() != "https":
         raise ValueError("Microsoft Graph pagination URLs must use HTTPS.")
@@ -135,11 +156,12 @@ def collect_azure_users(tenant_id: str) -> list[IdentityRecord]:
 
     try:
         page_url = "/users"
+        request_params = params
         while page_url:
             # Handle paged responses — Graph API uses @odata.nextLink for pagination
             endpoint = _normalize_graph_pagination_endpoint(page_url)
-            request_params = params if endpoint == page_url else None
             data = _graph_get(credential, endpoint, request_params)
+            request_params = None
 
             for user in data.get("value", []):
                 # Extract last sign-in from signInActivity (requires Azure AD P1/P2)
@@ -202,10 +224,11 @@ def collect_service_principals(tenant_id: str) -> list[IdentityRecord]:
 
     try:
         page_url = "/servicePrincipals"
+        request_params = params
         while page_url:
             endpoint = _normalize_graph_pagination_endpoint(page_url)
-            request_params = params if endpoint == page_url else None
             data = _graph_get(credential, endpoint, request_params)
+            request_params = None
 
             for sp in data.get("value", []):
                 record = IdentityRecord(

@@ -16,12 +16,31 @@ def test_normalize_graph_pagination_endpoint_accepts_relative_paths() -> None:
     assert endpoint == "/users?$skiptoken=abc"
 
 
+def test_normalize_graph_pagination_endpoint_rejects_relative_paths_without_leading_slash() -> None:
+    with pytest.raises(ValueError, match="must start with '/'"):
+        identity_collector._normalize_graph_pagination_endpoint("users?$skiptoken=abc")
+
+
 def test_normalize_graph_pagination_endpoint_allows_known_graph_hosts() -> None:
     endpoint = identity_collector._normalize_graph_pagination_endpoint(
         "https://graph.microsoft.com/v1.0/users?$skiptoken=abc"
     )
 
     assert endpoint == "/v1.0/users?$skiptoken=abc"
+
+
+def test_build_graph_api_url_prefixes_unversioned_endpoints() -> None:
+    url = identity_collector._build_graph_api_url("/users?$skiptoken=abc")
+
+    assert url == "https://graph.microsoft.com/v1.0/users?$skiptoken=abc"
+
+
+def test_build_graph_api_url_preserves_explicit_graph_versions() -> None:
+    v1_url = identity_collector._build_graph_api_url("/v1.0/users?$skiptoken=abc")
+    beta_url = identity_collector._build_graph_api_url("/beta/users?$skiptoken=abc")
+
+    assert v1_url == "https://graph.microsoft.com/v1.0/users?$skiptoken=abc"
+    assert beta_url == "https://graph.microsoft.com/beta/users?$skiptoken=abc"
 
 
 def test_normalize_graph_pagination_endpoint_rejects_unexpected_hosts() -> None:
@@ -46,7 +65,7 @@ def test_collect_azure_users_normalizes_safe_next_links(monkeypatch: pytest.Monk
                     "assignedLicenses": [],
                 }
             ],
-            "@odata.nextLink": "https://graph.microsoft.com/v1.0/users?$skiptoken=abc",
+            "@odata.nextLink": "/v1.0/users?$skiptoken=abc",
         },
         {
             "value": [
