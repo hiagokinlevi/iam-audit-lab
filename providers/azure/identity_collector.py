@@ -20,10 +20,17 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from schemas.identity import IdentityRecord, IdentityStatus, IdentityType
 
 logger = logging.getLogger(__name__)
+GRAPH_API_HOSTS = {
+    "graph.microsoft.com",
+    "graph.microsoft.us",
+    "dod-graph.microsoft.us",
+    "microsoftgraph.chinacloudapi.cn",
+}
 
 
 def _get_graph_client() -> Any:
@@ -77,6 +84,27 @@ def _graph_get(credential: Any, endpoint: str, params: Optional[dict] = None) ->
     return response.json()
 
 
+def _normalize_graph_pagination_endpoint(page_url: str) -> str:
+    """Convert a Graph nextLink URL into a safe relative endpoint."""
+    parsed = urlparse(page_url)
+    if not parsed.scheme and not parsed.netloc:
+        return page_url
+    if parsed.scheme.lower() != "https":
+        raise ValueError("Microsoft Graph pagination URLs must use HTTPS.")
+    if parsed.username or parsed.password:
+        raise ValueError("Microsoft Graph pagination URLs must not embed credentials.")
+
+    hostname = (parsed.hostname or "").strip().lower()
+    if hostname not in GRAPH_API_HOSTS:
+        raise ValueError(f"Unexpected Microsoft Graph pagination host: {hostname or '<missing>'}")
+    if not parsed.path.startswith("/"):
+        raise ValueError("Microsoft Graph pagination URLs must include an absolute path.")
+
+    if parsed.query:
+        return f"{parsed.path}?{parsed.query}"
+    return parsed.path
+
+
 def collect_azure_users(tenant_id: str) -> list[IdentityRecord]:
     """
     Collect all Azure AD users from the specified tenant.
@@ -109,13 +137,9 @@ def collect_azure_users(tenant_id: str) -> list[IdentityRecord]:
         page_url = "/users"
         while page_url:
             # Handle paged responses — Graph API uses @odata.nextLink for pagination
-            if page_url.startswith("https://"):
-                # nextLink is a full URL — extract the path portion
-                import urllib.parse
-                parsed = urllib.parse.urlparse(page_url)
-                data = _graph_get(credential, parsed.path + "?" + parsed.query)
-            else:
-                data = _graph_get(credential, page_url, params)
+            endpoint = _normalize_graph_pagination_endpoint(page_url)
+            request_params = params if endpoint == page_url else None
+            data = _graph_get(credential, endpoint, request_params)
 
             for user in data.get("value", []):
                 # Extract last sign-in from signInActivity (requires Azure AD P1/P2)
@@ -179,12 +203,9 @@ def collect_service_principals(tenant_id: str) -> list[IdentityRecord]:
     try:
         page_url = "/servicePrincipals"
         while page_url:
-            if page_url.startswith("https://"):
-                import urllib.parse
-                parsed = urllib.parse.urlparse(page_url)
-                data = _graph_get(credential, parsed.path + "?" + parsed.query)
-            else:
-                data = _graph_get(credential, page_url, params)
+            endpoint = _normalize_graph_pagination_endpoint(page_url)
+            request_params = params if endpoint == page_url else None
+            data = _graph_get(credential, endpoint, request_params)
 
             for sp in data.get("value", []):
                 record = IdentityRecord(
