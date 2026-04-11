@@ -115,3 +115,22 @@ def test_cli_analyze_password_policy_fail_on_medium_exits_nonzero() -> None:
 
     assert result.exit_code != 0
     assert "Password policy findings met --fail-on medium" in result.output
+
+
+def test_cli_analyze_password_policy_rejects_malformed_json() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("password-policy.json", "w", encoding="utf-8") as handle:
+            handle.write("{bad json")
+
+        result = runner.invoke(
+            cli,
+            [
+                "analyze-password-policy",
+                "--policy-file",
+                "password-policy.json",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "Password policy file must contain valid JSON" in result.output

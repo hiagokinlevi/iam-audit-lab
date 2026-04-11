@@ -27,6 +27,7 @@ from pathlib import Path
 
 import click
 from dotenv import load_dotenv
+from pydantic import ValidationError
 
 # Load .env file before processing any commands
 load_dotenv()
@@ -180,10 +181,11 @@ def analyze_policy(
     """Analyze an exported AWS IAM policy document without cloud credentials."""
     from analyzers.iam_policy_analyzer import IAMPolicyDocument, analyze
 
+    policy_document = _load_json_object(policy_file, label="Policy file")
     policy = IAMPolicyDocument(
         policy_id=policy_id,
         policy_name=policy_name,
-        policy_json=Path(policy_file).read_text(encoding="utf-8"),
+        policy_json=json.dumps(policy_document),
     )
     result = analyze(policy)
 
@@ -277,8 +279,12 @@ def analyze_password_policy(
     from analyzers.aws_password_policy_analyzer import analyze_password_policy as analyze_policy
 
     if policy_file:
-        data = json.loads(Path(policy_file).read_text(encoding="utf-8"))
+        data = _load_json_object(policy_file, label="Password policy file")
         policy = data.get("PasswordPolicy", data)
+        if policy is not None and not isinstance(policy, dict):
+            raise click.ClickException(
+                "Password policy file must contain a JSON object or an object with 'PasswordPolicy'."
+            )
     else:
         iam = _get_aws_session().client("iam")
         try:
@@ -360,8 +366,14 @@ def _load_or_collect_identities(provider: str, identities_file: str | None) -> l
     from schemas.identity import IdentityRecord
 
     if identities_file:
-        data = json.loads(Path(identities_file).read_text(encoding="utf-8"))
-        return [IdentityRecord.model_validate(item) for item in data]
+        data = _load_json_array(identities_file, label="Identities file")
+        identities = []
+        for index, item in enumerate(data):
+            try:
+                identities.append(IdentityRecord.model_validate(item))
+            except ValidationError as exc:
+                raise click.ClickException(f"Identities file entry {index} is invalid: {exc}") from exc
+        return identities
 
     # Collect fresh
     if provider == "aws":
@@ -378,6 +390,35 @@ def _load_or_collect_identities(provider: str, identities_file: str | None) -> l
         return collect_all_identities(os.environ.get("GCP_PROJECT_ID", ""))
 
     return []
+
+
+def _load_json_file(path: str | Path, *, label: str):
+    """Load a JSON document from disk and return the decoded payload."""
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise click.ClickException(f"Unable to read {label.lower()}: {exc}") from exc
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(f"{label} must contain valid JSON: {exc}") from exc
+
+
+def _load_json_object(path: str | Path, *, label: str) -> dict:
+    """Load a JSON object from disk for offline analyzer inputs."""
+    payload = _load_json_file(path, label=label)
+    if not isinstance(payload, dict):
+        raise click.ClickException(f"{label} must contain a top-level JSON object.")
+    return payload
+
+
+def _load_json_array(path: str | Path, *, label: str) -> list:
+    """Load a JSON array from disk for offline analyzer inputs."""
+    payload = _load_json_file(path, label=label)
+    if not isinstance(payload, list):
+        raise click.ClickException(f"{label} must contain a top-level JSON array.")
+    return payload
 
 
 def _print_findings_summary(findings: list) -> None:

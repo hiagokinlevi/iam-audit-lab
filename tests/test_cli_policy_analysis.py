@@ -76,3 +76,41 @@ def test_analyze_policy_fail_on_high_exits_nonzero() -> None:
 
     assert result.exit_code != 0
     assert "Policy risk tier HIGH meets --fail-on HIGH" in result.output
+
+
+def test_analyze_policy_rejects_malformed_json() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("policy.json", "w", encoding="utf-8") as handle:
+            handle.write("{bad json")
+
+        result = runner.invoke(
+            cli,
+            [
+                "analyze-policy",
+                "--policy-file",
+                "policy.json",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "Policy file must contain valid JSON" in result.output
+
+
+def test_analyze_policy_rejects_non_object_payload() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("policy.json", "w", encoding="utf-8") as handle:
+            json.dump([{"Effect": "Allow", "Action": "*", "Resource": "*"}], handle)
+
+        result = runner.invoke(
+            cli,
+            [
+                "analyze-policy",
+                "--policy-file",
+                "policy.json",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "Policy file must contain a top-level JSON object" in result.output
