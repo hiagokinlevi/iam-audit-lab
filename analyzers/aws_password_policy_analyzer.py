@@ -69,6 +69,12 @@ _RULES: dict[str, tuple[str, str, int, str]] = {
         10,
         "Allow users to change their own passwords unless a stricter federation flow owns passwords.",
     ),
+    "PW-006": (
+        "MEDIUM",
+        "Password expiration exceeds 90 days or is disabled",
+        20,
+        "Set ExpirePasswords to true and MaxPasswordAge to 90 days or fewer for local IAM users.",
+    ),
 }
 
 
@@ -118,6 +124,17 @@ def analyze_password_policy(
                 f"PasswordReusePrevention is {reuse_prevention}; expected at least 24.",
             )
         )
+
+    expire_passwords = bool(policy.get("ExpirePasswords"))
+    max_password_age = _int(policy.get("MaxPasswordAge"), 0)
+    if not expire_passwords or max_password_age == 0 or max_password_age > 90:
+        if not expire_passwords:
+            detail = "ExpirePasswords is false, so IAM console passwords never expire."
+        elif max_password_age > 90:
+            detail = f"MaxPasswordAge is {max_password_age}; expected 90 days or fewer."
+        else:
+            detail = "MaxPasswordAge is not set to a positive value, so password expiration is ineffective."
+        findings.append(_finding("PW-006", detail))
 
     if policy.get("AllowUsersToChangePassword") is False:
         findings.append(

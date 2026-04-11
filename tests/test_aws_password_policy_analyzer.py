@@ -16,6 +16,8 @@ def _strong_policy() -> dict:
         "RequireNumbers": True,
         "RequireSymbols": True,
         "PasswordReusePrevention": 24,
+        "ExpirePasswords": True,
+        "MaxPasswordAge": 90,
         "AllowUsersToChangePassword": True,
     }
 
@@ -46,6 +48,28 @@ def test_weak_password_policy_flags_length_complexity_and_reuse() -> None:
 
     assert [finding.rule_id for finding in result.findings] == ["PW-002", "PW-003", "PW-004"]
     assert result.risk_score == 60
+
+
+def test_passwords_that_never_expire_are_flagged() -> None:
+    policy = _strong_policy() | {
+        "ExpirePasswords": False,
+        "MaxPasswordAge": 0,
+    }
+
+    result = analyze_password_policy(policy)
+
+    assert [finding.rule_id for finding in result.findings] == ["PW-006"]
+    assert result.risk_score == 20
+
+
+def test_password_expiration_over_90_days_is_flagged() -> None:
+    policy = _strong_policy() | {"MaxPasswordAge": 120}
+
+    result = analyze_password_policy(policy)
+
+    assert [finding.rule_id for finding in result.findings] == ["PW-006"]
+    assert result.findings[0].severity == "MEDIUM"
+    assert "120" in result.findings[0].detail
 
 
 def test_cli_analyze_password_policy_json_output() -> None:
