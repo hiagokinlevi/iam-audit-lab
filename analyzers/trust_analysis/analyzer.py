@@ -113,7 +113,7 @@ def analyze_trust_policies(
 def _check_trust_policy(record: TrustPolicyRecord) -> list[TrustFinding]:
     """Run all trust policy checks against a single role."""
     findings: list[TrustFinding] = []
-    statements = record.trust_policy.get("Statement", [])
+    statements = _statement_list(record.trust_policy.get("Statement", []))
 
     for stmt in statements:
         effect = stmt.get("Effect", "Deny")
@@ -129,6 +129,15 @@ def _check_trust_policy(record: TrustPolicyRecord) -> list[TrustFinding]:
         _check_third_party_no_external_id(record, principal, condition, findings)
 
     return findings
+
+
+def _statement_list(statement_block: Any) -> list[dict[str, Any]]:
+    """Normalize a trust policy Statement block into a list of dicts."""
+    if isinstance(statement_block, dict):
+        return [statement_block]
+    if isinstance(statement_block, list):
+        return [stmt for stmt in statement_block if isinstance(stmt, dict)]
+    return []
 
 
 def _principal_values(principal: Any) -> list[str]:

@@ -69,6 +69,19 @@ def test_specific_principal_no_trp001():
     assert not any(f.rule_id == "TRP001" for f in findings)
 
 
+def test_single_statement_dict_wildcard_principal_is_critical():
+    r = _role("WildcardRoleDict", {
+        "Statement": {
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "sts:AssumeRole",
+        }
+    })
+    findings = analyze_trust_policies([r])
+
+    assert any(f.rule_id == "TRP001" for f in findings)
+
+
 # ---------------------------------------------------------------------------
 # TRP003: Cross-account without ExternalId
 # ---------------------------------------------------------------------------
@@ -115,6 +128,21 @@ def test_same_account_trust_no_cross_account_finding():
     })
     findings = analyze_trust_policies([r])
     # Same account — should not produce TRP003
+    assert not any(f.rule_id == "TRP003" for f in findings)
+
+
+def test_single_statement_dict_cross_account_external_id_is_info():
+    r = _role("SecureCrossAccountRoleDict", {
+        "Statement": {
+            "Effect": "Allow",
+            "Principal": {"AWS": f"arn:aws:iam::{_OTHER_ACCOUNT}:root"},
+            "Action": "sts:AssumeRole",
+            "Condition": {"StringEquals": {"sts:ExternalId": "my-external-id-12345"}},
+        }
+    })
+    findings = analyze_trust_policies([r])
+
+    assert any(f.rule_id == "TRP006" for f in findings)
     assert not any(f.rule_id == "TRP003" for f in findings)
 
 
