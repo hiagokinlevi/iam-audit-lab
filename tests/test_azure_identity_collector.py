@@ -29,6 +29,11 @@ def test_normalize_graph_pagination_endpoint_allows_known_graph_hosts() -> None:
     assert endpoint == "/v1.0/users?$skiptoken=abc"
 
 
+def test_normalize_graph_pagination_endpoint_rejects_unexpected_relative_paths() -> None:
+    with pytest.raises(ValueError, match="Unexpected Microsoft Graph pagination path"):
+        identity_collector._normalize_graph_pagination_endpoint("/applications?$skiptoken=abc")
+
+
 def test_build_graph_api_url_prefixes_unversioned_endpoints() -> None:
     url = identity_collector._build_graph_api_url("/users?$skiptoken=abc")
 
@@ -47,6 +52,20 @@ def test_normalize_graph_pagination_endpoint_rejects_unexpected_hosts() -> None:
     with pytest.raises(ValueError, match="Unexpected Microsoft Graph pagination host"):
         identity_collector._normalize_graph_pagination_endpoint(
             "https://169.254.169.254/metadata/identity/oauth2/token"
+        )
+
+
+def test_normalize_graph_pagination_endpoint_rejects_non_default_https_ports() -> None:
+    with pytest.raises(ValueError, match="default HTTPS port"):
+        identity_collector._normalize_graph_pagination_endpoint(
+            "https://graph.microsoft.com:444/v1.0/users?$skiptoken=abc"
+        )
+
+
+def test_normalize_graph_pagination_endpoint_rejects_path_parameters() -> None:
+    with pytest.raises(ValueError, match="path parameters"):
+        identity_collector._normalize_graph_pagination_endpoint(
+            "https://graph.microsoft.com/v1.0/users;param?$skiptoken=abc"
         )
 
 

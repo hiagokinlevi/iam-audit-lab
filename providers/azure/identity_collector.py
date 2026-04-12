@@ -33,6 +33,14 @@ GRAPH_API_HOSTS = {
     "microsoftgraph.chinacloudapi.cn",
 }
 GRAPH_API_VERSION_PREFIXES = ("/v1.0", "/beta")
+GRAPH_API_PAGINATION_PREFIXES = (
+    "/users",
+    "/servicePrincipals",
+    "/v1.0/users",
+    "/v1.0/servicePrincipals",
+    "/beta/users",
+    "/beta/servicePrincipals",
+)
 
 
 def _get_graph_client() -> Any:
@@ -109,19 +117,31 @@ def _normalize_graph_pagination_endpoint(page_url: str) -> str:
             raise ValueError(
                 "Microsoft Graph pagination endpoints must start with '/' when using a relative path."
             )
+        if parsed.fragment:
+            raise ValueError("Microsoft Graph pagination URLs must not include fragments.")
+        if parsed.params:
+            raise ValueError("Microsoft Graph pagination URLs must not include path parameters.")
+        if not parsed.path.startswith(GRAPH_API_PAGINATION_PREFIXES):
+            raise ValueError(f"Unexpected Microsoft Graph pagination path: {parsed.path}")
         return page_url
     if parsed.scheme.lower() != "https":
         raise ValueError("Microsoft Graph pagination URLs must use HTTPS.")
     if parsed.username or parsed.password:
         raise ValueError("Microsoft Graph pagination URLs must not embed credentials.")
+    if parsed.port not in (None, 443):
+        raise ValueError("Microsoft Graph pagination URLs must use the default HTTPS port.")
     if parsed.fragment:
         raise ValueError("Microsoft Graph pagination URLs must not include fragments.")
+    if parsed.params:
+        raise ValueError("Microsoft Graph pagination URLs must not include path parameters.")
 
     hostname = (parsed.hostname or "").strip().lower()
     if hostname not in GRAPH_API_HOSTS:
         raise ValueError(f"Unexpected Microsoft Graph pagination host: {hostname or '<missing>'}")
     if not parsed.path.startswith("/"):
         raise ValueError("Microsoft Graph pagination URLs must include an absolute path.")
+    if not parsed.path.startswith(GRAPH_API_PAGINATION_PREFIXES):
+        raise ValueError(f"Unexpected Microsoft Graph pagination path: {parsed.path}")
 
     if parsed.query:
         return f"{parsed.path}?{parsed.query}"
