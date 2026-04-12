@@ -114,6 +114,8 @@ def _normalize_graph_pagination_endpoint(page_url: str) -> str:
         raise ValueError("Microsoft Graph pagination URLs must use HTTPS.")
     if parsed.username or parsed.password:
         raise ValueError("Microsoft Graph pagination URLs must not embed credentials.")
+    if parsed.fragment:
+        raise ValueError("Microsoft Graph pagination URLs must not include fragments.")
 
     hostname = (parsed.hostname or "").strip().lower()
     if hostname not in GRAPH_API_HOSTS:

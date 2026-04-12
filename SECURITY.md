@@ -11,7 +11,7 @@
 **Please do not report security vulnerabilities through public GitHub issues.**
 
 If you discover a security vulnerability in `iam-audit-lab`, please report it
-responsibly by emailing the maintainer directly. Include:
+responsibly by emailing **hiagokinlevi@protonmail.com**. Include:
 
 1. A description of the vulnerability and its potential impact.
 2. Steps to reproduce the issue.

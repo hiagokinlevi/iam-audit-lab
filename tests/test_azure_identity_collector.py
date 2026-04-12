@@ -50,6 +50,13 @@ def test_normalize_graph_pagination_endpoint_rejects_unexpected_hosts() -> None:
         )
 
 
+def test_normalize_graph_pagination_endpoint_rejects_fragments() -> None:
+    with pytest.raises(ValueError, match="must not include fragments"):
+        identity_collector._normalize_graph_pagination_endpoint(
+            "https://graph.microsoft.com/v1.0/users?$skiptoken=abc#fragment"
+        )
+
+
 def test_collect_azure_users_normalizes_safe_next_links(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, dict | None]] = []
     pages = [
@@ -65,7 +72,7 @@ def test_collect_azure_users_normalizes_safe_next_links(monkeypatch: pytest.Monk
                     "assignedLicenses": [],
                 }
             ],
-            "@odata.nextLink": "/v1.0/users?$skiptoken=abc",
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/users?$skiptoken=abc",
         },
         {
             "value": [
