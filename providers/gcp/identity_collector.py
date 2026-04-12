@@ -18,7 +18,7 @@ Authorization note: Only use on GCP projects you own or are authorized to audit.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from schemas.identity import IdentityRecord, IdentityStatus, IdentityType
 
@@ -34,6 +34,66 @@ _PRIVILEGED_GCP_ROLES = {
     "roles/compute.admin",
     "roles/container.admin",
 }
+
+_PUBLIC_MEMBER_IDENTIFIERS = frozenset({"allUsers", "allAuthenticatedUsers"})
+_LEGACY_PROJECT_MEMBER_TYPES = frozenset(
+    {"projectOwner", "projectEditor", "projectViewer"}
+)
+
+
+def _parse_iam_member(member: str) -> tuple[IdentityType, str, dict[str, Any]]:
+    """Normalize a GCP IAM member string into schema-friendly fields."""
+    deleted = member.startswith("deleted:")
+    normalized_member = member[len("deleted:"):] if deleted else member
+
+    if normalized_member.startswith("principalSet://"):
+        metadata = {"memberType": "principalSet"}
+        if deleted:
+            metadata["deleted"] = True
+        return IdentityType.GROUP, normalized_member, metadata
+
+    if normalized_member.startswith("principal://"):
+        metadata = {"memberType": "principal"}
+        if deleted:
+            metadata["deleted"] = True
+        return IdentityType.SERVICE, normalized_member, metadata
+
+    if normalized_member in _PUBLIC_MEMBER_IDENTIFIERS:
+        metadata = {"memberType": "public"}
+        if deleted:
+            metadata["deleted"] = True
+        return IdentityType.GROUP, normalized_member, metadata
+
+    if ":" not in normalized_member:
+        metadata = {"memberType": "unknown"}
+        if deleted:
+            metadata["deleted"] = True
+        return IdentityType.UNKNOWN, normalized_member, metadata
+
+    member_type_str, member_id = normalized_member.split(":", 1)
+    display_id = member_id.split("?", 1)[0]
+
+    if member_type_str == "user":
+        identity_type = IdentityType.HUMAN
+        identity_name = display_id
+    elif member_type_str == "serviceAccount":
+        identity_type = IdentityType.SERVICE
+        identity_name = display_id
+    elif member_type_str in {"group", "domain"}:
+        identity_type = IdentityType.GROUP
+        identity_name = display_id
+    elif member_type_str in _LEGACY_PROJECT_MEMBER_TYPES:
+        identity_type = IdentityType.GROUP
+        identity_name = normalized_member
+    else:
+        identity_type = IdentityType.UNKNOWN
+        identity_name = normalized_member
+
+    metadata = {"memberType": member_type_str}
+    if deleted:
+        metadata["deleted"] = True
+
+    return identity_type, identity_name, metadata
 
 
 def _get_iam_client() -> Any:
@@ -139,8 +199,7 @@ def collect_iam_policy_members(project_id: str) -> list[IdentityRecord]:
         List of IdentityRecord, one per unique member principal.
     """
     try:
-        from google.cloud import resourcemanager_v3, iam_v1
-        rm_client = resourcemanager_v3.ProjectsClient()
+        rm_client = _get_resource_manager_client()
     except ImportError as e:
         logger.error("Cannot collect GCP IAM policy: %s", str(e))
         return []
@@ -159,39 +218,26 @@ def collect_iam_policy_members(project_id: str) -> list[IdentityRecord]:
             is_privileged = role in _PRIVILEGED_GCP_ROLES
 
             for member in binding.members:
-                # GCP member strings have the format: type:identifier
-                # e.g., user:alice@example.com, serviceAccount:sa@project.iam.gserviceaccount.com
-                if ":" in member:
-                    member_type_str, member_id = member.split(":", 1)
-                else:
-                    member_type_str, member_id = "unknown", member
-
-                # Classify the member type
-                if member_type_str == "user":
-                    identity_type = IdentityType.HUMAN
-                elif member_type_str in ("serviceAccount",):
-                    identity_type = IdentityType.SERVICE
-                elif member_type_str == "group":
-                    identity_type = IdentityType.GROUP
-                else:
-                    identity_type = IdentityType.UNKNOWN
+                identity_type, identity_name, raw_metadata = _parse_iam_member(member)
 
                 if member not in members:
                     # First time seeing this member — create the record
                     members[member] = IdentityRecord(
                         identity_id=member,
-                        identity_name=member_id,
+                        identity_name=identity_name,
                         identity_type=identity_type,
                         provider="gcp",
                         status=IdentityStatus.UNKNOWN,
                         attached_policies=[role],
                         is_privileged=is_privileged,
                         arn=member,
+                        raw_metadata=raw_metadata,
                     )
                 else:
                     # Already seen — append this role
                     existing = members[member]
-                    existing.attached_policies.append(role)
+                    if role not in existing.attached_policies:
+                        existing.attached_policies.append(role)
                     if is_privileged:
                         existing.is_privileged = True
 
