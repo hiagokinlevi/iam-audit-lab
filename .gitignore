@@ -1,0 +1,29 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+.venv_*/
+.venv-*/
+.venv.*
+.venv_cycle*/
+venv/
+
+# Local environment files
+.env
+.env.*
+
+# Codex / local automation artifacts
+.codex/
+publish-bridge/
+
