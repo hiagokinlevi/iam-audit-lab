@@ -122,6 +122,17 @@ class TestExcessivePermissionsAnalyzer:
         assert findings[0].severity == FindingSeverity.MEDIUM
         assert findings[0].title == "Public GCP IAM binding: allUsers -> roles/viewer"
 
+    def test_gcp_public_principal_casing_is_canonicalized(self) -> None:
+        identity = make_identity(
+            name="allusers",
+            provider="gcp",
+            attached_policies=["roles/viewer"],
+        )
+        findings = analyze_excessive_permissions([identity])
+        assert len(findings) == 1
+        assert findings[0].severity == FindingSeverity.MEDIUM
+        assert findings[0].title == "Public GCP IAM binding: allUsers -> roles/viewer"
+
     def test_gcp_public_allauthenticatedusers_admin_binding_is_high(self) -> None:
         identity = make_identity(
             name="allAuthenticatedUsers",
@@ -132,6 +143,19 @@ class TestExcessivePermissionsAnalyzer:
         assert len(findings) == 1
         assert findings[0].severity == FindingSeverity.HIGH
         assert findings[0].risk_score == 0.75
+
+    def test_gcp_public_allauthenticatedusers_casing_is_canonicalized(self) -> None:
+        identity = make_identity(
+            name="ALLAUTHENTICATEDUSERS",
+            provider="gcp",
+            attached_policies=["roles/iam.serviceAccountAdmin"],
+        )
+        findings = analyze_excessive_permissions([identity])
+        assert len(findings) == 1
+        assert findings[0].severity == FindingSeverity.HIGH
+        assert findings[0].title == (
+            "Public GCP IAM binding: allAuthenticatedUsers -> roles/iam.serviceAccountAdmin"
+        )
 
     def test_gcp_public_owner_binding_is_critical_without_duplicate_generic_finding(self) -> None:
         identity = make_identity(

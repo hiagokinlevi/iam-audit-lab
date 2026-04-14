@@ -126,6 +126,16 @@ def _is_gcp_public_member(identity: IdentityRecord) -> bool:
     )
 
 
+def _canonical_gcp_public_principal(principal: str) -> str:
+    """Return canonical casing for known public GCP IAM principals."""
+    normalized = principal.lower()
+    if normalized == "allusers":
+        return "allUsers"
+    if normalized == "allauthenticatedusers":
+        return "allAuthenticatedUsers"
+    return principal
+
+
 def _gcp_public_binding_severity(role_name: str) -> FindingSeverity:
     """Assign severity for a public GCP IAM binding based on the granted role."""
     normalized_role = role_name.lower()
@@ -145,10 +155,11 @@ def _build_gcp_public_binding_finding(
 ) -> AuditFinding:
     """Build a finding for a public GCP IAM member binding."""
     severity = _gcp_public_binding_severity(role_name)
-    principal = identity.identity_name
+    principal = _canonical_gcp_public_principal(identity.identity_name)
+    normalized_principal = principal.lower()
     audience = (
         "any internet user"
-        if principal == "allUsers"
+        if normalized_principal == "allusers"
         else "any Google-authenticated principal"
     )
 
