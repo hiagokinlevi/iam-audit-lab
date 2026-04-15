@@ -50,27 +50,7 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 
 ---
 
-## v0.5 — Continuous Monitoring
+## v0.5 — Continuous
 
-- [ ] Scheduled audit runs via cron or cloud scheduler
-- [ ] Delta reports: show only new findings since the last run
-- [ ] Finding persistence (SQLite or JSON store for tracking over time)
-- [ ] Alert on finding severity changes (e.g., new CRITICAL finding)
-
----
-
-## v1.0 — Production Readiness
-
-- [ ] Full test coverage (>90%)
-- [ ] Comprehensive documentation site
-- [ ] Performance optimization for large accounts (>1000 identities)
-- [ ] Stable public API with semantic versioning guarantee
-
----
-
-## Out of Scope (by design)
-
-- **Remediation automation** — The tool identifies and reports findings. Remediation should be
-  performed by authorized operators, not automated by an audit tool.
-- **Attack simulation** — This is an audit tool, not a penetration testing framework.
-- **Write access to any cloud provider** — All API access is strictly read-only.
+## Automated Completions
+- [x] AWS IAM Policy Collector (cycle 3)
