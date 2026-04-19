@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] AWS IAM Policy Collector (cycle 3)
+- [x] CLI Audit Command (cycle 18)
