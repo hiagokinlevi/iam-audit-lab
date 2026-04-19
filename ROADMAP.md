@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Security Findings Report Generator (cycle 19)
+- [x] IAM Admin Role Identification (cycle 20)
