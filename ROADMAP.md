@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Sample Misconfigured IAM Lab Dataset (cycle 24)
+- [x] CloudTrail-Based IAM Change History Auditor (cycle 25)
