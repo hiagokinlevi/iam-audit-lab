@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Continuous Audit Mode (cycle 23)
+- [x] Sample Misconfigured IAM Lab Dataset (cycle 24)
