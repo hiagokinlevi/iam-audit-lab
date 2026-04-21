@@ -1,0 +1,189 @@
+{
+  "dataset": "sample_misconfigured_iam_lab",
+  "version": "1.0.0",
+  "description": "Intentionally misconfigured IAM identities and policies for validating audit detections.",
+  "records": [
+    {
+      "id": "aws-user-admin-wildcard-no-mfa",
+      "provider": "aws",
+      "account_id": "111122223333",
+      "identity_type": "user",
+      "principal": "alice-admin",
+      "display_name": "Alice Admin",
+      "active": true,
+      "last_active_days": 3,
+      "mfa_enabled": false,
+      "attached_policies": [
+        "arn:aws:iam::aws:policy/AdministratorAccess"
+      ],
+      "inline_policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "FullAccess",
+            "Effect": "Allow",
+            "Action": "*",
+            "Resource": "*"
+          }
+        ]
+      },
+      "expected_findings": [
+        "EXCESSIVE_PERMISSIONS",
+        "WILDCARD_ACTION",
+        "MFA_MISSING"
+      ]
+    },
+    {
+      "id": "aws-role-passrole-unrestricted",
+      "provider": "aws",
+      "account_id": "111122223333",
+      "identity_type": "role",
+      "principal": "ci-deploy-role",
+      "display_name": "CI Deploy Role",
+      "active": true,
+      "last_active_days": 15,
+      "mfa_enabled": null,
+      "trust_policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      },
+      "inline_policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "PassAnyRole",
+            "Effect": "Allow",
+            "Action": [
+              "iam:PassRole",
+              "ec2:RunInstances"
+            ],
+            "Resource": "*"
+          }
+        ]
+      },
+      "expected_findings": [
+        "PASSROLE_UNRESTRICTED",
+        "TRUST_POLICY_OVERLY_PERMISSIVE"
+      ]
+    },
+    {
+      "id": "aws-user-inactive-access",
+      "provider": "aws",
+      "account_id": "444455556666",
+      "identity_type": "user",
+      "principal": "old.contractor",
+      "display_name": "Old Contractor",
+      "active": true,
+      "last_active_days": 210,
+      "mfa_enabled": false,
+      "attached_policies": [
+        "arn:aws:iam::aws:policy/ReadOnlyAccess"
+      ],
+      "expected_findings": [
+        "INACTIVE_IDENTITY",
+        "MFA_MISSING"
+      ]
+    },
+    {
+      "id": "gcp-project-public-binding-allusers-owner",
+      "provider": "gcp",
+      "project_id": "lab-project-001",
+      "identity_type": "member-binding",
+      "principal": "allUsers",
+      "display_name": "Public Principal",
+      "active": true,
+      "iam_binding": {
+        "role": "roles/owner",
+        "members": [
+          "allUsers"
+        ]
+      },
+      "expected_findings": [
+        "PUBLIC_BINDING_ALLUSERS",
+        "EXCESSIVE_PERMISSIONS"
+      ]
+    },
+    {
+      "id": "gcp-project-public-binding-authusers-editor",
+      "provider": "gcp",
+      "project_id": "lab-project-002",
+      "identity_type": "member-binding",
+      "principal": "allAuthenticatedUsers",
+      "display_name": "All Authenticated Users",
+      "active": true,
+      "iam_binding": {
+        "role": "roles/editor",
+        "members": [
+          "allAuthenticatedUsers"
+        ]
+      },
+      "expected_findings": [
+        "PUBLIC_BINDING_ALLAUTHENTICATEDUSERS",
+        "EXCESSIVE_PERMISSIONS"
+      ]
+    },
+    {
+      "id": "azure-user-global-admin-no-mfa",
+      "provider": "azure",
+      "tenant_id": "00000000-0000-0000-0000-000000000111",
+      "identity_type": "user",
+      "principal": "pat.globaladmin@contoso.com",
+      "display_name": "Pat Global Admin",
+      "active": true,
+      "last_active_days": 5,
+      "mfa_enabled": false,
+      "roles": [
+        "Global Administrator"
+      ],
+      "expected_findings": [
+        "EXCESSIVE_PERMISSIONS",
+        "MFA_MISSING"
+      ]
+    },
+    {
+      "id": "azure-sp-owner-inactive",
+      "provider": "azure",
+      "tenant_id": "00000000-0000-0000-0000-000000000111",
+      "identity_type": "service_principal",
+      "principal": "spn-legacy-ops",
+      "display_name": "Legacy Ops SP",
+      "active": true,
+      "last_active_days": 190,
+      "mfa_enabled": null,
+      "roles": [
+        "Owner"
+      ],
+      "expected_findings": [
+        "INACTIVE_IDENTITY",
+        "EXCESSIVE_PERMISSIONS"
+      ]
+    },
+    {
+      "id": "entra-guest-privileged",
+      "provider": "entra",
+      "tenant_id": "00000000-0000-0000-0000-000000000222",
+      "identity_type": "user",
+      "principal": "external.user_live.com#EXT#@fabrikam.onmicrosoft.com",
+      "display_name": "External Guest User",
+      "active": true,
+      "last_active_days": 45,
+      "mfa_enabled": false,
+      "roles": [
+        "Privileged Role Administrator"
+      ],
+      "user_category": "guest",
+      "expected_findings": [
+        "GUEST_PRIVILEGED_ROLE",
+        "MFA_MISSING"
+      ]
+    }
+  ]
+}
