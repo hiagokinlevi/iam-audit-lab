@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add --json output option to analyze-mfa command (cycle 27)
+- [x] Implement GCP member type normalization for allUsers/allAuthenticatedUsers (cycle 28)
