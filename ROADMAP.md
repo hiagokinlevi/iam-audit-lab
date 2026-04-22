@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] JSON Findings Export (cycle 26)
+- [x] Add --json output option to analyze-mfa command (cycle 27)
