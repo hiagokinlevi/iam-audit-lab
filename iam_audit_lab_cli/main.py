@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 from pathlib import Path
 
@@ -7,22 +5,9 @@ import click
 
 from analyzers.inactive_accounts import analyze_inactive_accounts
 from analyzers.mfa_coverage import analyze_mfa_coverage
-from analyzers.privilege_analyzer import analyze_privileges
-from analyzers.aws_policy_analyzer import analyze_aws_policy
-
-
-SEVERITY_ORDER = {
-    "low": 1,
-    "medium": 2,
-    "high": 3,
-    "critical": 4,
-}
-
-
-def _severity_meets_or_exceeds(finding_severity: str, threshold: str) -> bool:
-    finding_value = SEVERITY_ORDER.get(str(finding_severity).lower(), 0)
-    threshold_value = SEVERITY_ORDER.get(str(threshold).lower(), 999)
-    return finding_value >= threshold_value
+from analyzers.privilege_analyzer import analyze_excessive_permissions
+from reports.markdown_report import generate_markdown_report
+from schemas.models import IdentityRecord
 
 
 @click.group()
@@ -31,93 +16,65 @@ def cli() -> None:
 
 
 @cli.command("analyze-privileges")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False, path_type=Path))
-@click.option(
-    "--fail-on-severity",
-    type=click.Choice(["medium", "high", "critical"], case_sensitive=False),
-    default=None,
-    help="Return non-zero if any finding is at or above this severity.",
-)
-def analyze_privileges_cmd(input_path: Path, output_path: Path, fail_on_severity: str | None) -> None:
-    """Analyze identity privileges and emit findings."""
-    with input_path.open("r", encoding="utf-8") as f:
-        identities = json.load(f)
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path))
+def analyze_privileges_cmd(input_path: Path) -> None:
+    records = [IdentityRecord.model_validate(x) for x in json.loads(input_path.read_text())]
+    findings = analyze_excessive_permissions(records)
 
-    findings = analyze_privileges(identities)
+    if not findings:
+        click.echo("No excessive privilege findings.")
+        return
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(findings, f, indent=2)
-
-    if fail_on_severity:
-        should_fail = any(
-            _severity_meets_or_exceeds(f.get("severity", ""), fail_on_severity)
-            for f in findings
-        )
-        if should_fail:
-            raise click.ClickException(
-                f"Found findings with severity >= {fail_on_severity}."
-            )
-
-
-@cli.command("analyze-policy")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False, path_type=Path))
-@click.option(
-    "--fail-on-severity",
-    type=click.Choice(["low", "medium", "high", "critical"], case_sensitive=False),
-    default=None,
-    help="Return non-zero if any finding is at or above this severity.",
-)
-def analyze_policy_cmd(input_path: Path, output_path: Path, fail_on_severity: str | None) -> None:
-    with input_path.open("r", encoding="utf-8") as f:
-        policy = json.load(f)
-
-    findings = analyze_aws_policy(policy)
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(findings, f, indent=2)
-
-    if fail_on_severity:
-        should_fail = any(
-            _severity_meets_or_exceeds(f.get("severity", ""), fail_on_severity)
-            for f in findings
-        )
-        if should_fail:
-            raise click.ClickException(
-                f"Found findings with severity >= {fail_on_severity}."
-            )
+    click.echo(f"Found {len(findings)} excessive privilege finding(s):")
+    for f in findings:
+        click.echo(f"- [{f.severity}] {f.provider}:{f.identity_id} -> {f.issue}")
 
 
 @cli.command("analyze-mfa")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False, path_type=Path))
-def analyze_mfa_cmd(input_path: Path, output_path: Path) -> None:
-    with input_path.open("r", encoding="utf-8") as f:
-        identities = json.load(f)
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path))
+def analyze_mfa_cmd(input_path: Path) -> None:
+    records = [IdentityRecord.model_validate(x) for x in json.loads(input_path.read_text())]
+    result = analyze_mfa_coverage(records)
 
-    findings = analyze_mfa_coverage(identities)
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(findings, f, indent=2)
+    click.echo("MFA Coverage")
+    click.echo("------------")
+    click.echo(f"Total identities: {result.total_identities}")
+    click.echo(f"MFA enabled: {result.mfa_enabled}")
+    click.echo(f"MFA missing: {result.mfa_missing}")
+    click.echo(f"Coverage: {result.coverage_percent:.2f}%")
 
 
 @cli.command("analyze-inactive")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False, path_type=Path))
-@click.option("--days", default=90, show_default=True, type=int)
-def analyze_inactive_cmd(input_path: Path, output_path: Path, days: int) -> None:
-    with input_path.open("r", encoding="utf-8") as f:
-        identities = json.load(f)
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path))
+@click.option("--days", "days_threshold", default=90, show_default=True, type=int)
+@click.option("--json", "json_output", is_flag=True, help="Emit findings as JSON to stdout")
+def analyze_inactive_cmd(input_path: Path, days_threshold: int, json_output: bool) -> None:
+    records = [IdentityRecord.model_validate(x) for x in json.loads(input_path.read_text())]
+    findings = analyze_inactive_accounts(records, days_threshold=days_threshold)
 
-    findings = analyze_inactive_accounts(identities, inactivity_days=days)
+    if json_output:
+        click.echo(json.dumps([f.model_dump(mode="json") for f in findings], indent=2))
+        return
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(findings, f, indent=2)
+    if not findings:
+        click.echo(f"No inactive accounts older than {days_threshold} days.")
+        return
+
+    click.echo(f"Found {len(findings)} inactive account(s):")
+    for f in findings:
+        click.echo(
+            f"- [{f.severity}] {f.provider}:{f.identity_id} -> {f.issue} (inactive_days={f.inactive_days})"
+        )
+
+
+@cli.command("generate-report")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path))
+@click.option("--output", "output_path", required=True, type=click.Path(path_type=Path))
+def generate_report_cmd(input_path: Path, output_path: Path) -> None:
+    records = [IdentityRecord.model_validate(x) for x in json.loads(input_path.read_text())]
+    report = generate_markdown_report(records)
+    output_path.write_text(report)
+    click.echo(f"Report written to {output_path}")
 
 
 if __name__ == "__main__":
