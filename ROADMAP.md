@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add deterministic severity sorting in Markdown report findings section (cycle 29)
+- [x] Introduce --fail-on-severity threshold for analyze-privileges (cycle 30)
