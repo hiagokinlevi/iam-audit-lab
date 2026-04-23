@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Implement GCP member type normalization for allUsers/allAuthenticatedUsers (cycle 28)
+- [x] Add deterministic severity sorting in Markdown report findings section (cycle 29)
