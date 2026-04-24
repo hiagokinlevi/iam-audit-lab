@@ -2,57 +2,44 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import click
 
-from analyzers.policy import analyze_aws_policy_document
+from iam_audit_lab_cli.collectors import collect_identities
 
 
 @click.group()
 def cli() -> None:
-    """iam-audit-lab CLI."""
+    """iam-audit-lab command line interface."""
 
 
-@cli.command("analyze-policy")
-@click.option("--policy-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True)
-@click.option("--fail-on-severity", type=click.Choice(["low", "medium", "high", "critical"], case_sensitive=False), default=None)
-@click.option("--json", "json_output", is_flag=True, default=False, help="Emit findings as JSON.")
-def analyze_policy(policy_file: Path, fail_on_severity: str | None, json_output: bool) -> None:
-    """Analyze an exported AWS IAM policy JSON document."""
-    policy_doc = json.loads(policy_file.read_text(encoding="utf-8"))
-    findings = analyze_aws_policy_document(policy_doc)
+@cli.command("collect-identities")
+@click.option("--provider", type=click.Choice(["aws", "azure", "gcp", "all"]), default="all", show_default=True)
+@click.option("--json", "json_output", is_flag=True, help="Emit normalized IdentityRecord data as JSON.")
+@click.option("--out", "out_file", type=click.Path(path_type=Path), default=None, help="Write output to file path.")
+def collect_identities_cmd(provider: str, json_output: bool, out_file: Path | None) -> None:
+    """Collect identities from configured providers."""
+    records = collect_identities(provider=provider)
 
     if json_output:
-        serialized = []
-        for f in findings:
-            statement = getattr(f, "statement", None)
-            serialized.append(
-                {
-                    "rule_id": getattr(f, "rule_id", None),
-                    "severity": str(getattr(f, "severity", "")).lower(),
-                    "statement": {
-                        "sid": statement.get("Sid") if isinstance(statement, dict) else None,
-                        "index": getattr(f, "statement_index", None),
-                    },
-                    "message": getattr(f, "message", ""),
-                }
-            )
-        click.echo(json.dumps({"findings": serialized}, indent=2))
+        normalized: list[dict[str, Any]] = [r.model_dump(mode="json") if hasattr(r, "model_dump") else dict(r) for r in records]
+        normalized = sorted(
+            normalized,
+            key=lambda r: (
+                str(r.get("provider", "")),
+                str(r.get("identity_type", "")),
+                str(r.get("account_id", "")),
+                str(r.get("principal_name", "")),
+                str(r.get("id", "")),
+            ),
+        )
+        payload = json.dumps(normalized, indent=2)
+        if out_file:
+            out_file.write_text(payload + "\n", encoding="utf-8")
+            click.echo(f"Wrote {len(normalized)} identities to {out_file}")
+            return
+        click.echo(payload)
         return
 
-    if not findings:
-        click.echo("No policy findings detected.")
-    else:
-        click.echo(f"Detected {len(findings)} policy finding(s):")
-        for f in findings:
-            click.echo(f"- [{str(getattr(f, 'severity', '')).upper()}] {getattr(f, 'rule_id', 'unknown')}: {getattr(f, 'message', '')}")
-
-    if fail_on_severity:
-        order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
-        threshold = order[fail_on_severity.lower()]
-        if any(order.get(str(getattr(f, "severity", "")).lower(), 0) >= threshold for f in findings):
-            raise SystemExit(2)
-
-
-if __name__ == "__main__":
-    cli()
+    click.echo(f"Collected {len(records)} identities")
