@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add --json output option to analyze-inactive command (cycle 31)
+- [x] Add --json output option to analyze-policy command (cycle 32)
