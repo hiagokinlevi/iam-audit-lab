@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add --json output option to analyze-privileges command (cycle 35)
+- [x] Add --min-last-seen-days filter to analyze-inactive CLI (cycle 36)
