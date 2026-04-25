@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add --min-last-seen-days filter to analyze-inactive CLI (cycle 36)
+- [x] Add `--format {md,json}` option to `generate-report` with file extension validation (cycle 37)
