@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--format {md,json}` option to `generate-report` with file extension validation (cycle 37)
+- [x] Add --min-severity filter to generate-report output (cycle 38)
