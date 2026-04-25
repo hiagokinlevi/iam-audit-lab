@@ -1,13 +1,14 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from typing import Optional
 
 import click
 
-from analyzers.inactive_accounts import analyze_inactive_accounts
-from analyzers.mfa_coverage import analyze_mfa_coverage
-from analyzers.privilege_analyzer import analyze_excessive_permissions
-from reports.markdown_report import generate_markdown_report
-from schemas.models import IdentityRecord
+from reports.generator import generate_markdown_report
+from schemas.finding import AuditFinding
+from schemas.identity import IdentityRecord
 
 
 @click.group()
@@ -15,65 +16,37 @@ def cli() -> None:
     """iam-audit-lab CLI."""
 
 
-@cli.command("analyze-privileges")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path))
-def analyze_privileges_cmd(input_path: Path) -> None:
-    records = [IdentityRecord.model_validate(x) for x in json.loads(input_path.read_text())]
-    findings = analyze_excessive_permissions(records)
+@cli.command("generate-report")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path), help="Path to input identities JSON file.")
+@click.option("--output", "output_path", required=True, type=click.Path(path_type=Path), help="Path to output report file (must match --format extension).")
+@click.option("--format", "report_format", type=click.Choice(["md", "json"], case_sensitive=False), default="md", show_default=True, help="Report output format.")
+def generate_report(input_path: Path, output_path: Path, report_format: str) -> None:
+    """Generate a report from normalized identity data."""
 
-    if not findings:
-        click.echo("No excessive privilege findings.")
-        return
-
-    click.echo(f"Found {len(findings)} excessive privilege finding(s):")
-    for f in findings:
-        click.echo(f"- [{f.severity}] {f.provider}:{f.identity_id} -> {f.issue}")
-
-
-@cli.command("analyze-mfa")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path))
-def analyze_mfa_cmd(input_path: Path) -> None:
-    records = [IdentityRecord.model_validate(x) for x in json.loads(input_path.read_text())]
-    result = analyze_mfa_coverage(records)
-
-    click.echo("MFA Coverage")
-    click.echo("------------")
-    click.echo(f"Total identities: {result.total_identities}")
-    click.echo(f"MFA enabled: {result.mfa_enabled}")
-    click.echo(f"MFA missing: {result.mfa_missing}")
-    click.echo(f"Coverage: {result.coverage_percent:.2f}%")
-
-
-@cli.command("analyze-inactive")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path))
-@click.option("--days", "days_threshold", default=90, show_default=True, type=int)
-@click.option("--json", "json_output", is_flag=True, help="Emit findings as JSON to stdout")
-def analyze_inactive_cmd(input_path: Path, days_threshold: int, json_output: bool) -> None:
-    records = [IdentityRecord.model_validate(x) for x in json.loads(input_path.read_text())]
-    findings = analyze_inactive_accounts(records, days_threshold=days_threshold)
-
-    if json_output:
-        click.echo(json.dumps([f.model_dump(mode="json") for f in findings], indent=2))
-        return
-
-    if not findings:
-        click.echo(f"No inactive accounts older than {days_threshold} days.")
-        return
-
-    click.echo(f"Found {len(findings)} inactive account(s):")
-    for f in findings:
-        click.echo(
-            f"- [{f.severity}] {f.provider}:{f.identity_id} -> {f.issue} (inactive_days={f.inactive_days})"
+    report_format = report_format.lower()
+    expected_suffix = f".{report_format}"
+    if output_path.suffix.lower() != expected_suffix:
+        raise click.BadParameter(
+            f"Output file extension must be '{expected_suffix}' when --format {report_format} is selected.",
+            param_hint="--output",
         )
 
+    raw = json.loads(input_path.read_text(encoding="utf-8"))
+    identities = [IdentityRecord.model_validate(item) for item in raw.get("identities", [])]
+    findings = [AuditFinding.model_validate(item) for item in raw.get("findings", [])]
 
-@cli.command("generate-report")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, path_type=Path))
-@click.option("--output", "output_path", required=True, type=click.Path(path_type=Path))
-def generate_report_cmd(input_path: Path, output_path: Path) -> None:
-    records = [IdentityRecord.model_validate(x) for x in json.loads(input_path.read_text())]
-    report = generate_markdown_report(records)
-    output_path.write_text(report)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if report_format == "json":
+        payload = {
+            "identities": [item.model_dump(mode="json") for item in identities],
+            "findings": [item.model_dump(mode="json") for item in findings],
+        }
+        output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    else:
+        markdown = generate_markdown_report(identities=identities, findings=findings)
+        output_path.write_text(markdown, encoding="utf-8")
+
     click.echo(f"Report written to {output_path}")
 
 
