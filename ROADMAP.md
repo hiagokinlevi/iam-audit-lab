@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add --provider filter to collect-identities CLI (cycle 39)
+- [x] Add --fail-on-findings threshold to analyze-inactive (cycle 40)
