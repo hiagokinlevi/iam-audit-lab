@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add --fail-on-findings threshold to analyze-inactive (cycle 40)
+- [x] Add `--fail-on-count` threshold to `analyze-policy` CLI (cycle 41)
