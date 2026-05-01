@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import click
 
-from analyzers.inactive_accounts import analyze_inactive_accounts
-from analyzers.mfa_coverage import analyze_mfa_coverage
-from analyzers.offline_aws_policy import analyze_aws_policy_document
-from analyzers.privilege_analysis import analyze_excessive_permissions
-from providers.aws import collect_aws_identities
-from providers.azure import collect_azure_identities
-from providers.gcp import collect_gcp_identities
+from analyzers.inactive import analyze_inactive_identities
+from analyzers.mfa import analyze_mfa_coverage
+from analyzers.policy import analyze_aws_policy_document
+from analyzers.privileges import analyze_excessive_privileges
 from reports.generator import generate_markdown_report
-from schemas.finding import AuditFinding
+from schemas.findings import AuditFinding
 from schemas.identity import IdentityRecord
+
+
+ALLOWED_PROVIDERS = ("aws", "azure", "gcp", "entra")
 
 
 @click.group()
@@ -22,79 +23,92 @@ def cli() -> None:
     """iam-audit-lab CLI."""
 
 
-@cli.command("collect-identities")
-@click.option("--provider", type=click.Choice(["aws", "azure", "gcp", "all"]), default="all")
-@click.option("--output", type=click.Path(path_type=Path), required=True)
-def collect_identities(provider: str, output: Path) -> None:
-    records: list[IdentityRecord] = []
-
-    if provider in ("aws", "all"):
-        records.extend(collect_aws_identities())
-    if provider in ("azure", "all"):
-        records.extend(collect_azure_identities())
-    if provider in ("gcp", "all"):
-        records.extend(collect_gcp_identities())
-
-    output.write_text(json.dumps([r.model_dump(mode="json") for r in records], indent=2), encoding="utf-8")
-    click.echo(f"Collected {len(records)} identities -> {output}")
-
-
 @cli.command("analyze-privileges")
-@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--output", type=click.Path(path_type=Path), required=True)
-def analyze_privileges_cmd(input_path: Path, output: Path) -> None:
-    identities = [IdentityRecord.model_validate(i) for i in json.loads(input_path.read_text(encoding="utf-8"))]
-    findings = analyze_excessive_permissions(identities)
-    output.write_text(json.dumps([f.model_dump(mode="json") for f in findings], indent=2), encoding="utf-8")
-    click.echo(f"Generated {len(findings)} privilege findings -> {output}")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False))
+def analyze_privileges_cmd(input_path: str, output_path: str) -> None:
+    """Analyze identities for excessive privileges."""
+    records = _load_identity_records(Path(input_path))
+    findings = analyze_excessive_privileges(records)
+    _write_findings(Path(output_path), findings)
+    click.echo(f"Wrote {len(findings)} findings to {output_path}")
 
 
 @cli.command("analyze-mfa")
-@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--output", type=click.Path(path_type=Path), required=True)
-def analyze_mfa_cmd(input_path: Path, output: Path) -> None:
-    identities = [IdentityRecord.model_validate(i) for i in json.loads(input_path.read_text(encoding="utf-8"))]
-    findings = analyze_mfa_coverage(identities)
-    output.write_text(json.dumps([f.model_dump(mode="json") for f in findings], indent=2), encoding="utf-8")
-    click.echo(f"Generated {len(findings)} MFA findings -> {output}")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False), help="Path to collected identity JSON.")
+@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False), help="Path to write MFA analysis findings JSON.")
+@click.option(
+    "--provider",
+    type=click.Choice(ALLOWED_PROVIDERS, case_sensitive=False),
+    required=False,
+    help="Optional provider filter (aws, azure, gcp, entra). Only matching identity records are analyzed.",
+)
+def analyze_mfa_cmd(input_path: str, output_path: str, provider: str | None) -> None:
+    """Analyze identities for MFA coverage gaps."""
+    records = _load_identity_records(Path(input_path))
+
+    if provider:
+        provider_normalized = provider.lower()
+        records = [r for r in records if (r.provider or "").lower() == provider_normalized]
+
+    findings = analyze_mfa_coverage(records)
+    _write_findings(Path(output_path), findings)
+    click.echo(f"Wrote {len(findings)} findings to {output_path}")
 
 
 @cli.command("analyze-inactive")
-@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--output", type=click.Path(path_type=Path), required=True)
-@click.option("--days", type=int, default=90, show_default=True)
-def analyze_inactive_cmd(input_path: Path, output: Path, days: int) -> None:
-    identities = [IdentityRecord.model_validate(i) for i in json.loads(input_path.read_text(encoding="utf-8"))]
-    findings = analyze_inactive_accounts(identities, inactive_days=days)
-    output.write_text(json.dumps([f.model_dump(mode="json") for f in findings], indent=2), encoding="utf-8")
-    click.echo(f"Generated {len(findings)} inactive-account findings -> {output}")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False))
+@click.option("--days", default=90, show_default=True, type=int)
+def analyze_inactive_cmd(input_path: str, output_path: str, days: int) -> None:
+    """Analyze identities for inactivity."""
+    records = _load_identity_records(Path(input_path))
+    findings = analyze_inactive_identities(records, inactivity_days=days)
+    _write_findings(Path(output_path), findings)
+    click.echo(f"Wrote {len(findings)} findings to {output_path}")
 
 
 @cli.command("analyze-policy")
-@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--output", type=click.Path(path_type=Path), required=True)
-@click.option("--fail-on-count", type=click.IntRange(min=0), required=False)
-def analyze_policy_cmd(input_path: Path, output: Path, fail_on_count: int | None) -> None:
-    policy_document = json.loads(input_path.read_text(encoding="utf-8"))
-    findings = analyze_aws_policy_document(policy_document)
-    output.write_text(json.dumps([f.model_dump(mode="json") for f in findings], indent=2), encoding="utf-8")
-    click.echo(f"Generated {len(findings)} policy findings -> {output}")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False))
+def analyze_policy_cmd(input_path: str, output_path: str) -> None:
+    """Analyze an exported AWS IAM policy document for risky patterns."""
+    with Path(input_path).open("r", encoding="utf-8") as f:
+        policy_doc = json.load(f)
 
-    if fail_on_count is not None and len(findings) >= fail_on_count:
-        raise SystemExit(2)
+    findings = analyze_aws_policy_document(policy_doc)
+    _write_findings(Path(output_path), findings)
+    click.echo(f"Wrote {len(findings)} findings to {output_path}")
 
 
 @cli.command("generate-report")
-@click.option("--identities", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--findings", type=click.Path(exists=True, path_type=Path), required=True)
-@click.option("--output", type=click.Path(path_type=Path), required=True)
-def generate_report_cmd(identities: Path, findings: Path, output: Path) -> None:
-    identity_records = [IdentityRecord.model_validate(i) for i in json.loads(identities.read_text(encoding="utf-8"))]
-    finding_records = [AuditFinding.model_validate(i) for i in json.loads(findings.read_text(encoding="utf-8"))]
+@click.option("--identities", "identities_path", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--findings", "findings_path", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--output", "output_path", required=True, type=click.Path(dir_okay=False))
+def generate_report_cmd(identities_path: str, findings_path: str, output_path: str) -> None:
+    """Generate markdown report from identities and findings."""
+    identities = _load_identity_records(Path(identities_path))
+    findings = _load_findings(Path(findings_path))
+    report = generate_markdown_report(identities, findings)
+    Path(output_path).write_text(report, encoding="utf-8")
+    click.echo(f"Wrote report to {output_path}")
 
-    markdown = generate_markdown_report(identity_records, finding_records)
-    output.write_text(markdown, encoding="utf-8")
-    click.echo(f"Report written -> {output}")
+
+def _load_identity_records(path: Path) -> list[IdentityRecord]:
+    with path.open("r", encoding="utf-8") as f:
+        raw: Any = json.load(f)
+    return [IdentityRecord.model_validate(item) for item in raw]
+
+
+def _load_findings(path: Path) -> list[AuditFinding]:
+    with path.open("r", encoding="utf-8") as f:
+        raw: Any = json.load(f)
+    return [AuditFinding.model_validate(item) for item in raw]
+
+
+def _write_findings(path: Path, findings: list[AuditFinding]) -> None:
+    payload = [f.model_dump(mode="json") for f in findings]
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":
