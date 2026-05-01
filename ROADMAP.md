@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add --fail-on-severity to analyze-mfa CLI command (cycle 42)
+- [x] Add `--provider` filter to `analyze-mfa` CLI command (cycle 43)
