@@ -58,14 +58,14 @@ CLI (click)
 |---|---|---|
 | **AWS** | IAM users, IAM roles | boto3 session (profile or environment) |
 | **Azure** | Azure AD users, service principals | azure-identity (DefaultAzureCredential) |
-| **GCP** | IAM members, service accounts | Applica
+| **GCP** | IAM members, service accounts | 
 
 ---
 
-## Reporting
-
-Generate a structured JSON report instead of Markdown:
+## CLI Usage Snippet
 
 ```bash
-iam-audit-lab generate-report --input identities.json --json > report.json
+iam-audit-lab analyze-policy --input ./policy.json --output ./reports/policy-findings.json
 ```
+
+When `--output` is omitted, findings are printed to stdout as before.
