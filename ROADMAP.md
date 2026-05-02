@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--provider` filter to `analyze-mfa` CLI command (cycle 43)
+- [x] Add --provider filter to analyze-inactive CLI command (cycle 44)
