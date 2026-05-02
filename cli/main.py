@@ -5,110 +5,41 @@ from pathlib import Path
 
 import click
 
-from analyzers.inactive_accounts import analyze_inactive_accounts
-from analyzers.mfa_coverage import analyze_mfa_coverage
-from analyzers.privilege_analysis import analyze_excessive_permissions
-from providers.aws import collect_aws_identities
-from providers.azure import collect_azure_identities
-from providers.gcp import collect_gcp_identities
-from reports.json_report import export_json_report
-from reports.markdown_report import generate_markdown_report
-from schemas.audit_finding import AuditFinding
-from schemas.identity_record import IdentityRecord
-
 
 @click.group()
 def cli() -> None:
     """iam-audit-lab CLI."""
 
 
-@cli.command("collect-identities")
-@click.option("--provider", type=click.Choice(["aws", "azure", "gcp", "all"]), default="all")
-@click.option("--output", default="identities.json", show_default=True)
-def collect_identities(provider: str, output: str) -> None:
-    identities: list[IdentityRecord] = []
+@cli.command("analyze-policy")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Path to exported AWS IAM policy JSON.")
+@click.option("--fail-on-high", is_flag=True, default=False, help="Exit non-zero when high severity findings are present.")
+@click.option(
+    "--output",
+    "output_path",
+    required=False,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Optional file path to write findings JSON (creates parent dirs, overwrites existing file).",
+)
+def analyze_policy(input_path: Path, fail_on_high: bool, output_path: Path | None) -> None:
+    """Analyze an exported AWS IAM policy file for risky patterns."""
 
-    if provider in ("aws", "all"):
-        identities.extend(collect_aws_identities())
-    if provider in ("azure", "all"):
-        identities.extend(collect_azure_identities())
-    if provider in ("gcp", "all"):
-        identities.extend(collect_gcp_identities())
+    # Local import to keep CLI startup light.
+    from analyzers.policy import analyze_aws_policy_document
 
-    Path(output).write_text(
-        json.dumps([i.model_dump(mode="json") for i in identities], indent=2),
-        encoding="utf-8",
-    )
-    click.echo(f"Collected {len(identities)} identities -> {output}")
+    raw = json.loads(input_path.read_text(encoding="utf-8"))
+    findings = analyze_aws_policy_document(raw)
 
+    rendered = json.dumps(findings, indent=2)
 
-@cli.command("analyze-privileges")
-@click.option("--input", "input_path", required=True)
-@click.option("--output", default="findings.json", show_default=True)
-def analyze_privileges_cmd(input_path: str, output: str) -> None:
-    data = json.loads(Path(input_path).read_text(encoding="utf-8"))
-    identities = [IdentityRecord(**row) for row in data]
-    findings = analyze_excessive_permissions(identities)
-
-    Path(output).write_text(
-        json.dumps([f.model_dump(mode="json") for f in findings], indent=2),
-        encoding="utf-8",
-    )
-    click.echo(f"Generated {len(findings)} findings -> {output}")
-
-
-@cli.command("analyze-mfa")
-@click.option("--input", "input_path", required=True)
-@click.option("--output", default="mfa_findings.json", show_default=True)
-def analyze_mfa_cmd(input_path: str, output: str) -> None:
-    data = json.loads(Path(input_path).read_text(encoding="utf-8"))
-    identities = [IdentityRecord(**row) for row in data]
-    findings = analyze_mfa_coverage(identities)
-
-    Path(output).write_text(
-        json.dumps([f.model_dump(mode="json") for f in findings], indent=2),
-        encoding="utf-8",
-    )
-    click.echo(f"Generated {len(findings)} MFA findings -> {output}")
-
-
-@cli.command("analyze-inactive")
-@click.option("--input", "input_path", required=True)
-@click.option("--days", default=90, show_default=True, type=int)
-@click.option("--output", default="inactive_findings.json", show_default=True)
-def analyze_inactive_cmd(input_path: str, days: int, output: str) -> None:
-    data = json.loads(Path(input_path).read_text(encoding="utf-8"))
-    identities = [IdentityRecord(**row) for row in data]
-    findings = analyze_inactive_accounts(identities, inactive_days=days)
-
-    Path(output).write_text(
-        json.dumps([f.model_dump(mode="json") for f in findings], indent=2),
-        encoding="utf-8",
-    )
-    click.echo(f"Generated {len(findings)} inactive-account findings -> {output}")
-
-
-@cli.command("generate-report")
-@click.option("--identities", "identities_path", required=True)
-@click.option("--findings", "findings_path", required=True)
-@click.option("--format", "report_format", type=click.Choice(["markdown", "json"]), default="markdown", show_default=True)
-@click.option("--output", default=None)
-def generate_report_cmd(identities_path: str, findings_path: str, report_format: str, output: str | None) -> None:
-    identities_raw = json.loads(Path(identities_path).read_text(encoding="utf-8"))
-    findings_raw = json.loads(Path(findings_path).read_text(encoding="utf-8"))
-
-    identities = [IdentityRecord(**row) for row in identities_raw]
-    findings = [AuditFinding(**row) for row in findings_raw]
-
-    if report_format == "json":
-        out = output or "iam_audit_report.json"
-        export_json_report(findings=findings, identities=identities, output_path=out)
+    if output_path is not None:
+      output_path.parent.mkdir(parents=True, exist_ok=True)
+      output_path.write_text(rendered + "\n", encoding="utf-8")
     else:
-        out = output or "iam_audit_report.md"
-        markdown = generate_markdown_report(findings=findings, identities=identities)
-        Path(out).write_text(markdown, encoding="utf-8")
+      click.echo(rendered)
 
-    click.echo(f"Report written -> {out}")
+    if fail_on_high and any(f.get("severity") == "high" for f in findings):
+        raise click.ClickException("High severity policy findings detected.")
 
 
 if __name__ == "__main__":
