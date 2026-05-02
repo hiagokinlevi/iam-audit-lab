@@ -6,40 +6,55 @@ from pathlib import Path
 import click
 
 
+SEVERITY_ORDER = {
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+    "critical": 4,
+}
+
+
 @click.group()
 def cli() -> None:
     """iam-audit-lab CLI."""
 
 
-@cli.command("analyze-policy")
-@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Path to exported AWS IAM policy JSON.")
-@click.option("--fail-on-high", is_flag=True, default=False, help="Exit non-zero when high severity findings are present.")
+@cli.command("analyze-privileges")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--output", "output_path", required=False, type=click.Path(dir_okay=False, path_type=Path))
 @click.option(
-    "--output",
-    "output_path",
+    "--fail-on-severity",
+    type=click.Choice(["low", "medium", "high", "critical"], case_sensitive=False),
     required=False,
-    type=click.Path(dir_okay=False, path_type=Path),
-    help="Optional file path to write findings JSON (creates parent dirs, overwrites existing file).",
+    default=None,
+    help="Exit non-zero if any finding is at or above this severity.",
 )
-def analyze_policy(input_path: Path, fail_on_high: bool, output_path: Path | None) -> None:
-    """Analyze an exported AWS IAM policy file for risky patterns."""
+def analyze_privileges(input_path: Path, output_path: Path | None, fail_on_severity: str | None) -> None:
+    """Analyze privilege findings from a JSON file.
 
-    # Local import to keep CLI startup light.
-    from analyzers.policy import analyze_aws_policy_document
+    Expects input JSON with shape: {"findings": [{"severity": "low|medium|high|critical", ...}, ...]}
+    """
+    data = json.loads(input_path.read_text(encoding="utf-8"))
+    findings = data.get("findings", [])
 
-    raw = json.loads(input_path.read_text(encoding="utf-8"))
-    findings = analyze_aws_policy_document(raw)
-
-    rendered = json.dumps(findings, indent=2)
-
-    if output_path is not None:
-      output_path.parent.mkdir(parents=True, exist_ok=True)
-      output_path.write_text(rendered + "\n", encoding="utf-8")
+    if output_path:
+        output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     else:
-      click.echo(rendered)
+        click.echo(json.dumps(data))
 
-    if fail_on_high and any(f.get("severity") == "high" for f in findings):
-        raise click.ClickException("High severity policy findings detected.")
+    if fail_on_severity is None:
+        return
+
+    threshold = SEVERITY_ORDER[fail_on_severity.lower()]
+    should_fail = any(
+        SEVERITY_ORDER.get(str(f.get("severity", "")).lower(), 0) >= threshold
+        for f in findings
+    )
+
+    if should_fail:
+        raise click.ClickException(
+            f"Found findings at or above severity '{fail_on_severity.lower()}'."
+        )
 
 
 if __name__ == "__main__":
