@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--output` file path option to `analyze-policy` CLI (cycle 45)
+- [x] Add --fail-on-severity threshold to analyze-privileges CLI (cycle 46)
