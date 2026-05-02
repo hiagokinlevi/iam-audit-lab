@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add --provider filter to analyze-inactive CLI command (cycle 44)
+- [x] Add `--output` file path option to `analyze-policy` CLI (cycle 45)
