@@ -2,54 +2,60 @@ import json
 
 from click.testing import CliRunner
 
-from iam_audit_lab_cli.main import cli
+from cli.main import cli
 
 
-def test_analyze_privileges_fail_on_severity_gates_ci(tmp_path):
+def _write_input(tmp_path, findings):
+    p = tmp_path / "findings.json"
+    p.write_text(json.dumps({"findings": findings}), encoding="utf-8")
+    return p
+
+
+def test_analyze_privileges_default_behavior_no_fail(tmp_path):
+    input_file = _write_input(
+        tmp_path,
+        [
+            {"id": "f1", "severity": "high"},
+        ],
+    )
+
     runner = CliRunner()
+    result = runner.invoke(cli, ["analyze-privileges", "--input", str(input_file)])
 
-    identities_path = tmp_path / "identities.json"
-    findings_path = tmp_path / "findings.json"
+    assert result.exit_code == 0
 
-    # Include one clearly privileged identity expected to trigger a high/critical-style finding
-    identities = [
-        {
-            "id": "u-1",
-            "provider": "aws",
-            "identity_type": "user",
-            "name": "admin-user",
-            "roles": ["AdministratorAccess"],
-            "mfa_enabled": True,
-            "last_active": "2026-01-01T00:00:00Z",
-        }
-    ]
-    identities_path.write_text(json.dumps(identities), encoding="utf-8")
 
-    pass_result = runner.invoke(
-        cli,
+def test_analyze_privileges_fails_when_threshold_met(tmp_path):
+    input_file = _write_input(
+        tmp_path,
         [
-            "analyze-privileges",
-            "--input",
-            str(identities_path),
-            "--output",
-            str(findings_path),
-            "--fail-on-severity",
-            "critical",
+            {"id": "f1", "severity": "medium"},
+            {"id": "f2", "severity": "critical"},
         ],
     )
 
-    fail_result = runner.invoke(
+    runner = CliRunner()
+    result = runner.invoke(
         cli,
+        ["analyze-privileges", "--input", str(input_file), "--fail-on-severity", "HIGH"],
+    )
+
+    assert result.exit_code != 0
+
+
+def test_analyze_privileges_passes_when_no_finding_meets_threshold(tmp_path):
+    input_file = _write_input(
+        tmp_path,
         [
-            "analyze-privileges",
-            "--input",
-            str(identities_path),
-            "--output",
-            str(findings_path),
-            "--fail-on-severity",
-            "medium",
+            {"id": "f1", "severity": "low"},
+            {"id": "f2", "severity": "medium"},
         ],
     )
 
-    assert pass_result.exit_code == 0
-    assert fail_result.exit_code != 0
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["analyze-privileges", "--input", str(input_file), "--fail-on-severity", "critical"],
+    )
+
+    assert result.exit_code == 0
