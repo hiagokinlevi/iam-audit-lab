@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--provider` filter to `analyze-privileges` CLI command (cycle 47)
+- [x] Add `--fail-on-risk-score` threshold to `generate-report` CLI (cycle 48)
