@@ -58,14 +58,19 @@ CLI (click)
 |---|---|---|
 | **AWS** | IAM users, IAM roles | boto3 session (profile or environment) |
 | **Azure** | Azure AD users, service principals | azure-identity (DefaultAzureCredential) |
-| **GCP** | IAM members, service accounts | 
+| **GCP** | IAM members, service accounts | |
 
 ---
 
-## CLI Usage Snippet
+## CLI usage snippet
+
+Use a stricter inactivity threshold in production audits:
 
 ```bash
-iam-audit-lab analyze-policy --input ./policy.json --output ./reports/policy-findings.json
+iam-audit-lab analyze-inactive \
+  --input data/identities.json \
+  --output data/inactive-findings.json \
+  --max-age-days 30
 ```
 
-When `--output` is omitted, findings are printed to stdout as before.
+`--max-age-days` must be a positive integer and defaults to `90` days.
