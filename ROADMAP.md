@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--max-age-days` option to `analyze-inactive` CLI command (cycle 49)
+- [x] Add `--only-failing` option to `analyze-policy` CLI output (cycle 50)
