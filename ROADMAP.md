@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--fail-on-risk-score` threshold to `generate-report` CLI (cycle 48)
+- [x] Add `--max-age-days` option to `analyze-inactive` CLI command (cycle 49)
