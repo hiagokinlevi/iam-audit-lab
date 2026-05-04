@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--only-failing` option to `analyze-policy` CLI output (cycle 50)
+- [x] Add `--output` option to `analyze-mfa` CLI command (cycle 51)
