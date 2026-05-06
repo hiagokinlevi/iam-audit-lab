@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--format {table,json}` option to `analyze-policy` CLI output (cycle 55)
+- [x] Add --format {table,json} option to analyze-mfa CLI output (cycle 57)
