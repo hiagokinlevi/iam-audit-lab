@@ -1,15 +1,16 @@
-from __future__ import annotations
-
 import json
 from pathlib import Path
-from typing import Any
+from typing import Optional
 
 import click
 
-from reports.generator import generate_json_report, generate_markdown_report
-
-
-VALID_PROVIDERS = {"aws", "azure", "gcp", "entra"}
+from analyzers.inactive import analyze_inactive_identities
+from analyzers.mfa import analyze_mfa_coverage
+from analyzers.privileges import analyze_excessive_privileges
+from iam_audit_lab_cli.models import IdentityRecord
+from providers.aws import collect_aws_identities
+from providers.azure import collect_azure_identities
+from providers.gcp import collect_gcp_identities
 
 
 @click.group()
@@ -17,75 +18,71 @@ def cli() -> None:
     """iam-audit-lab CLI."""
 
 
-@cli.command("generate-report")
-@click.option(
-    "--identities",
-    "identities_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
-    help="Path to identities JSON file.",
-)
-@click.option(
-    "--findings",
-    "findings_path",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
-    help="Path to findings JSON file.",
-)
-@click.option(
-    "--format",
-    "output_format",
-    type=click.Choice(["markdown", "json"], case_sensitive=False),
-    default="markdown",
-    show_default=True,
-    help="Output format.",
-)
+@cli.command("collect-identities")
 @click.option(
     "--provider",
-    type=click.Choice(sorted(VALID_PROVIDERS), case_sensitive=False),
-    required=False,
-    help="Filter report content to one provider (aws|azure|gcp|entra). Example: --provider aws",
+    type=click.Choice(["aws", "azure", "gcp", "all"], case_sensitive=False),
+    default="all",
+    show_default=True,
+    help="Cloud provider to collect identities from.",
 )
 @click.option(
     "--output",
-    "output_path",
-    type=click.Path(dir_okay=False, path_type=Path),
-    required=True,
-    help="Output report file path.",
+    type=click.Path(path_type=Path, dir_okay=False, writable=True),
+    required=False,
+    help="Write normalized identity records to this JSON file (defaults to stdout).",
 )
-def generate_report(
-    identities_path: Path,
-    findings_path: Path,
-    output_format: str,
-    provider: str | None,
-    output_path: Path,
-) -> None:
-    """Generate Markdown or JSON report from identities and findings."""
-    identities: list[dict[str, Any]] = json.loads(identities_path.read_text(encoding="utf-8"))
-    findings: list[dict[str, Any]] = json.loads(findings_path.read_text(encoding="utf-8"))
+def collect_identities(provider: str, output: Optional[Path]) -> None:
+    """Collect and normalize identities from configured cloud providers.
 
-    selected_provider = provider.lower() if provider else None
-    if selected_provider:
-        identities = [
-            record
-            for record in identities
-            if str(record.get("provider", "")).lower() == selected_provider
-        ]
-        findings = [
-            finding
-            for finding in findings
-            if str(finding.get("provider", "")).lower() == selected_provider
-        ]
+    Use --output to persist results for downstream analyze-* commands in CI pipelines.
+    """
+    provider = provider.lower()
+    records: list[IdentityRecord] = []
 
-    output_format = output_format.lower()
-    if output_format == "markdown":
-        report_content = generate_markdown_report(identities=identities, findings=findings)
-        output_path.write_text(report_content, encoding="utf-8")
+    if provider in {"aws", "all"}:
+        records.extend(collect_aws_identities())
+    if provider in {"azure", "all"}:
+        records.extend(collect_azure_identities())
+    if provider in {"gcp", "all"}:
+        records.extend(collect_gcp_identities())
+
+    payload = [r.model_dump() if hasattr(r, "model_dump") else r.dict() for r in records]
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        click.echo(f"Wrote {len(payload)} identity records to {output}")
     else:
-        report_payload = generate_json_report(identities=identities, findings=findings)
-        output_path.write_text(json.dumps(report_payload, indent=2), encoding="utf-8")
+        click.echo(json.dumps(payload, indent=2))
 
-    click.echo(f"Report written to: {output_path}")
+
+@cli.command("analyze-privileges")
+@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
+def analyze_privileges_cmd(input_path: Path) -> None:
+    """Analyze identity records for excessive permissions."""
+    data = json.loads(input_path.read_text(encoding="utf-8"))
+    findings = analyze_excessive_privileges(data)
+    click.echo(json.dumps([f.model_dump() if hasattr(f, "model_dump") else f.dict() for f in findings], indent=2))
+
+
+@cli.command("analyze-mfa")
+@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
+def analyze_mfa_cmd(input_path: Path) -> None:
+    """Analyze identity records for MFA coverage gaps."""
+    data = json.loads(input_path.read_text(encoding="utf-8"))
+    findings = analyze_mfa_coverage(data)
+    click.echo(json.dumps([f.model_dump() if hasattr(f, "model_dump") else f.dict() for f in findings], indent=2))
+
+
+@cli.command("analyze-inactive")
+@click.option("--input", "input_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--days", type=int, default=90, show_default=True)
+def analyze_inactive_cmd(input_path: Path, days: int) -> None:
+    """Analyze identity records for inactive accounts."""
+    data = json.loads(input_path.read_text(encoding="utf-8"))
+    findings = analyze_inactive_identities(data, days_threshold=days)
+    click.echo(json.dumps([f.model_dump() if hasattr(f, "model_dump") else f.dict() for f in findings], indent=2))
 
 
 if __name__ == "__main__":
