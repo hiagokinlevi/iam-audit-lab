@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--output` option to `collect-identities` CLI command (cycle 58)
+- [x] Add `--output` option to `analyze-policy` CLI command (cycle 59)
