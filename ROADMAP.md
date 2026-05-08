@@ -53,4 +53,4 @@ This document outlines the planned development trajectory for `iam-audit-lab`.
 ## v0.5 — Continuous
 
 ## Automated Completions
-- [x] Add `--output` option to `analyze-policy` CLI command (cycle 59)
+- [x] Add `--min-severity` filter to `generate-report` CLI command (cycle 60)
