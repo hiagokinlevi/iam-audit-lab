@@ -58,19 +58,21 @@ CLI (click)
 |---|---|---|
 | **AWS** | IAM users, IAM roles | boto3 session (profile or environment) |
 | **Azure** | Azure AD users, service principals | azure-identity (DefaultAzureCredential) |
-| **GCP** | IAM members, service accounts | |
+| **GCP** | IAM members, service accounts | 
 
 ---
 
-## CLI usage snippet
+## CLI Usage
 
-Use a stricter inactivity threshold in production audits:
+### Generate report with severity scope
+
+By default, `generate-report` includes all severities. Use `--min-severity` to focus on actionable production risk levels:
 
 ```bash
-iam-audit-lab analyze-inactive \
-  --input data/identities.json \
-  --output data/inactive-findings.json \
-  --max-age-days 30
+iam-audit-lab generate-report \
+  --identities data/identities.json \
+  --findings data/findings.json \
+  --output reports/prod-report.md \
+  --format markdown \
+  --min-severity high
 ```
-
-`--max-age-days` must be a positive integer and defaults to `90` days.
